@@ -345,6 +345,24 @@ function respond_json_new_unit(cmd,cookies)
 		return "{error='new_unit_failed'}"
 	end
 end
+function respond_json_move( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end
+	local unit,err2=get_unit(user)
+	if not unit then return  "{error='invalid_unit'}" end
+
+	if unit.flags1.dead then return "{error='dead'}" end
+
+	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
+	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
+	--TODO figure out dz by looking if you are going up ramp etc...
+	unit.idle_area.x=unit.pos.x+tonumber(cmd.dx)
+	unit.idle_area.y=unit.pos.y+tonumber(cmd.dy)
+	unit.idle_area_type=37 --Guard
+	unit.idle_area_threshold=0
+
+	return "{}"
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -363,6 +381,8 @@ function responses(request,cmd,cookies)
 		return respond_delete(cmd,cookies)
 	elseif request=='new_unit' then
 		return respond_json_new_unit(cmd,cookies)
+	elseif request=='move_unit' then
+		return respond_json_move(cmd,cookies)
 	else
 		printd("Request:",request)
 		printd("cmd:",cmd)

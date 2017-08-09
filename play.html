@@ -78,6 +78,44 @@ function get_new_unit() {
 	xhttp.open("GET", "new_unit", true);
 	xhttp.send();
 }
+var mouse_pos={x:0,y:0}
+function move_unit() {
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		//do sth?
+	}
+	};
+	xhttp.open("GET", "move_unit?dx="+mouse_pos.x+"&dy="+mouse_pos.y, true);
+	xhttp.send();
+}
+var mouseIsDown = false;
+function update_mouse(e) {
+	console.log("Pos:"+e.x+" "+e.y);
+	var cx=Math.floor(e.x/tile_x)-(canvas_tile_count-1)/2;
+	var cy=Math.floor(e.y/tile_y)-(canvas_tile_count-1)/2;
+	console.log("Tile Pos:"+cx+" "+cy);
+	mouse_pos={x:cx,y:cy}
+}
+c.onmousedown = function(e){
+	update_mouse(e)
+    //dragOffset.x = e.x - mainLayer.trans.x;
+    //dragOffset.y = e.y - mainLayer.trans.y;
+    move_unit()
+    mouseIsDown = true;
+}
+
+c.onmouseup = function(e){
+
+    mouseIsDown = false;
+}
+/* //TODO issue commands each X time
+c.onmousemove = function(e){
+    if(!mouseIsDown) return;
+    update_mouse(e)
+    return false;
+}
+*/
 update_map();
 </script>
 <button onclick="get_new_unit()">Ask for new unit</button> 
