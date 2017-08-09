@@ -1,0 +1,32 @@
+<script>
+function getCookie(cname) {
+    var name = cname + "=";
+    var decodedCookie = decodeURIComponent(document.cookie);
+    var ca = decodedCookie.split(';');
+    for(var i = 0; i <ca.length; i++) {
+        var c = ca[i];
+        while (c.charAt(0) == ' ') {
+            c = c.substring(1);
+        }
+        if (c.indexOf(name) == 0) {
+            return c.substring(name.length, c.length);
+        }
+    }
+    return "";
+}
+</script>
+<header>
+<h1>Dwarf fortress<h1>
+<p>The multiplayer experience: the gladiatoring</p>
+</header>
+<p>To play:<a href="login">Login</a></p>
+<div id='user_play'></div>
+<script type="text/javascript">
+	var user=getCookie('username')
+	if(user!="")
+	{
+		document.getElementById("user_play").innerHTML = "<p> Welcome back "+user+". Would you like to <a href=play>Play</a>?</p>"
+	}
+</script>
+<p>Try <a href="help ">Help</a> for list of commands</p>
+
