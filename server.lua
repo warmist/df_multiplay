@@ -22,7 +22,7 @@ local utils=require 'utils'
 local args={...}
 
 local HOST="http://dwarffort.duckdns.org/"
-local DEBUG=true
+local DEBUG=false
 if DEBUG then
 	printd=function ( ... )
 		print(...)
@@ -86,6 +86,7 @@ port=port or sock.tcp:bind(HOST,6666)
 port:setNonblocking()
 
 local clients={}
+local pause_countdown=0
 
 function get_window(x,y,z,w,h ) --maybe a fallback method?
 	local ret={}
@@ -449,18 +450,30 @@ function poke_clients()
 		clients[k]=nil
 	end
 end
+function server_unpause()
+	pause_countdown=10
+end
 function accept_connections(  )
 
 	while port:select(0,1) do
 		local c=port:accept()
 		--print("Opened Connection")
 		clients[c]=true
+		--TODO the server unpause should go only when there are logged in players
+		server_unpause()
 		c:setNonblocking()
 	end
 end
 function event_loop()
 	accept_connections()
+	if pause_countdown>0 then
+		df.global.pause_state=false
+		pause_countdown=pause_countdown-1
+	else
+		df.global.pause_state=true
+	end
 	poke_clients()
+
 	timeout_looper=dfhack.timeout(10,'frames',event_loop)
 end
 event_loop()
