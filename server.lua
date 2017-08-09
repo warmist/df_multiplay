@@ -115,9 +115,11 @@ function pick_unused_target()
 		id=math.random(0,#u-1)
 		if unit_used[id] then
 			id=nil
+		elseif not u[id] or u[id].flags1.dead then
+			id=nil
 		else
 			--check if unit is civ?
-			return u[id],id
+			return u[id],u[id].id
 		end
 		count=count+1
 	end
@@ -258,13 +260,14 @@ function get_unit( user )
 		end
 		user.unit_id=u_id
 		unit_used[u_id]=true
+		return u,u_id
 	end
 
 	local t=df.unit.find(user.unit_id)
 	if t ==nil then
 		return false,page_data.intro.."Sorry, your unit was lost somewhere... :("..page_data.outro
 	end
-	return t
+	return t,user.unit_id
 end
 function respond_play( cmd,cookies )
 
@@ -282,7 +285,7 @@ function respond_play( cmd,cookies )
 
 	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
 end
-function respond_map(cmd,cookies)
+function respond_json_map(cmd,cookies)
 
 	local user,err=get_user(cmd,cookies)
 	if not user then return "[]" end --TODO somehow report error?
@@ -324,6 +327,23 @@ function respond_delete( cmd, cookies )
 		return fill_page_data(page_data.del_user,{username=cookies.username})
 	end
 end
+function respond_json_new_unit(cmd,cookies)
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end --TODO somehow report error?
+
+	if user.unit_id then --release old one if we have one
+		unit_used[user.unit_id]=nil
+		user.unit_id=nil
+	end
+
+	local new_unit,u_id=get_unit(user)
+	if new_unit then
+		user.unit_id=u_id
+		return string.format("{unit_id=%d}",u_id)
+	else
+		return "{error='new_unit_failed'}"
+	end
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -337,9 +357,11 @@ function responses(request,cmd,cookies)
 	elseif request=='play' then
 		return respond_play(cmd,cookies)
 	elseif request=='map' then
-		return respond_map(cmd,cookies)
+		return respond_json_map(cmd,cookies)
 	elseif request=='delete'then
 		return respond_delete(cmd,cookies)
+	elseif request=='new_unit' then
+		return respond_json_new_unit(cmd,cookies)
 	else
 		printd("Request:",request)
 		printd("cmd:",cmd)
