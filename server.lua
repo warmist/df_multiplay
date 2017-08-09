@@ -274,36 +274,13 @@ function respond_play( cmd,cookies )
 	if not t then return err2 end
 
 	local w=15
-	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
-	local line=""
-	local map_string=""
-	--local skip_first=false
-	for i=0,#m,4 do
-		--if not skip_first then --temp fix because render map returns one img too little?
-		if m[i]~=0 then
-			line=line..string.char(m[i])
-		else
-			line=line..' '
-		end
-		map_string=map_string..string.format("[%d, %d, %d, %d],",m[i],m[i+1],m[i+2],m[i+3])
-		--end
-		--skip_first=false
-		if #line==w then
-			--ret=ret..dfhack.df2utf(line).."<br>\n"
-			line=""
-			map_string=map_string.."\n"
-			--skip_first=true
-		end
-	end
 	local valid_variables={
-		map=map_string,
 		size=w,
 		canvas_w=w*16,
 		canvas_h=w*16,
 	}
 
 	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
-	--ret=ret..unit_info(user,t)
 end
 function respond_map(cmd,cookies)
 
