@@ -57,7 +57,8 @@ function load_page_data()
 		'welcome',
 		'login',
 		'cookie',
-		'play'
+		'play',
+		'del_user'
 	}
 	for i,v in ipairs(files) do
 		local f=io.open('hack/scripts/http/'..v..'.html','rb')
@@ -243,7 +244,7 @@ function respond_cookie(cmd)
 	return fill_page_data(page_data.cookie,{username=cmd.username,password=cmd.password}) --set cookies
 end
 function get_user(cmd, cookies)
-	if cookies.username==nil or cookies.username=="" or cookies.password~=users[cookies.username].password then
+	if cookies.username==nil or cookies.username=="" or users[cookies.username]==nil or cookies.password~=users[cookies.username].password then
 		return false,page_data.intro.."Invalid login"..page_data.outro
 	end
 	local user=users[cookies.username]
@@ -332,6 +333,20 @@ function respond_map(cmd,cookies)
 
 	return "["..map_string.."]"
 end
+function respond_delete( cmd, cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return page_data.intro.."Invalid user and/or login"..page_data.outro end
+
+	if not cmd.do_delete then
+		return page_data.intro.."Are you sure you want to <a href='delete?do_delete'> DELETE</a> your account?"..page_data.outro
+	else
+		if user.unit_id then
+			unit_used[user.unit_id]=nil
+		end
+		users[cookies.username]=nil
+		return fill_page_data(page_data.del_user,{username=cookies.username})
+	end
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -346,6 +361,8 @@ function responses(request,cmd,cookies)
 		return respond_play(cmd,cookies)
 	elseif request=='map' then
 		return respond_map(cmd,cookies)
+	elseif request=='delete'then
+		return respond_delete(cmd,cookies)
 	else
 		printd("Request:",request)
 		printd("cmd:",cmd)
