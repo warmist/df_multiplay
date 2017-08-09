@@ -30,6 +30,7 @@ function color_tiles( x,y,fg,bright ){
 	ctx.fillRect(x*tile_x,y*tile_y,tile_x,tile_y);
 }
 function draw_map(){
+	ctx.clearRect(0, 0, c.width, c.height);
 	ctx.globalCompositeOperation="source-over";
 	for(var x=0;x<canvas_tile_count;x++)
 	for(var y=0;y<canvas_tile_count;y++)
@@ -54,5 +55,19 @@ function draw_map(){
 		draw_bg(x,y,t[2]);
 	}
 }
-draw_map();
+function update_map() {
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var json_map= JSON.parse(this.responseText);
+		map=json_map
+		draw_map()
+		setTimeout(update_map, 100);
+	}
+	};
+	xhttp.open("GET", "map", true);
+	xhttp.send();
+}
+update_map();
 </script>
+ <button onclick="update_map()">Click me</button> 

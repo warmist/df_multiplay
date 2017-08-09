@@ -166,106 +166,6 @@ function unit_info(user, u )
 	return ret
 
 end
-function respond_map(user)
-	local ret=HTML_HEAD
-	local S=[===[
-	<canvas id="canvas" width="!!canvas_w!!" height="!!canvas_h!!"></canvas><br>
-	<img id="tilesheet" src="http://i.imgur.com/fUGSAWC.png" alt="tilesheet" style="display: none;">
-	<script>
-	var c = document.getElementById("canvas");
-	var ctx = c.getContext("2d");
-	var spr=document.getElementById("tilesheet");
-	var tile_x=16;
-	var tile_y=16;
-	var canvas_tile_count=!!size!!;
-	var map=[!!map!!];
-	var color_map=[[0,0,0],[0,0,128],[0,128,0],[0,128,128],
-		[128,0,0],[128,0,128],[128,128,0],[192,192,192],
-		[128,128,128],[0,0,255],[0,255,0],[0,255,255],
-		[255,0,0],[255,0,255],[255,255,0],[255,255,255]];
-	function color(id){
-		var c=color_map[id]
-  		return "rgb("+c[0]+","+c[1]+","+c[2]+")";
-	}
-	function draw_bg( x,y,bg ){
-		ctx.fillStyle=color(bg);
-		ctx.fillRect(x*tile_x,y*tile_y,tile_x,tile_y);
-	}
-	function draw_tile( x,y,tile){
-		var sx=tile%16;
-		var sy=Math.floor(tile/16);
-		ctx.drawImage(spr,sx*tile_x,sy*tile_y,tile_x,tile_y,x*tile_x,y*tile_y,tile_x,tile_y);
-	}
-	function color_tiles( x,y,fg,bright ){
-		ctx.fillStyle=color(fg+bright*8);
-		ctx.fillRect(x*tile_x,y*tile_y,tile_x,tile_y);
-	}
-	function draw_map(){
-		ctx.globalCompositeOperation="source-over";
-		for(var x=0;x<canvas_tile_count;x++)
-		for(var y=0;y<canvas_tile_count;y++)
-		{
-			var t=map[x+y*canvas_tile_count]
-			draw_tile(x,y,t[0]);
-		}
-		
-		ctx.globalCompositeOperation="source-atop";
-		for(var x=0;x<canvas_tile_count;x++)
-		for(var y=0;y<canvas_tile_count;y++)
-		{
-			var t=map[x+y*canvas_tile_count]
-			color_tiles(x,y,t[1],t[3]);
-		}
-		
-		ctx.globalCompositeOperation="destination-over";
-		for(var x=0;x<canvas_tile_count;x++)
-		for(var y=0;y<canvas_tile_count;y++)
-		{
-			var t=map[x+y*canvas_tile_count]
-			draw_bg(x,y,t[2]);
-		}
-	}
-	draw_map();
-	</script>
-	]===]
-	local t=df.unit.find(user.unit_id)--df.global.world.units.active[unit_id]--pick_target()
-	local w=15
-	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
-	local line=""
-	local map_string=""
-	--local skip_first=false
-	for i=0,#m,4 do
-		--if not skip_first then --temp fix because render map returns one img too little?
-		if m[i]~=0 then
-			line=line..string.char(m[i])
-		else
-			line=line..' '
-		end
-		map_string=map_string..string.format("[%d, %d, %d, %d],",m[i],m[i+1],m[i+2],m[i+3])
-		--end
-		--skip_first=false
-		if #line==w then
-			--ret=ret..dfhack.df2utf(line).."<br>\n"
-			line=""
-			map_string=map_string.."\n"
-			--skip_first=true
-		end
-	end
-	local valid_variables={
-		map=map_string,
-		size=w,
-		canvas_w=w*16,
-		canvas_h=w*16,
-	}
-	function replace_vars( v )
-		local vname=v:sub(3,-3)
-		return tostring(valid_variables[vname])
-	end
-	ret=ret..S:gsub("(!![^!]+!!)",replace_vars)
-	ret=ret..unit_info(user,t)
-	ret=ret..HTML_END
-	return ret
-end
 function respond_new_user( username )
 	local unit=pick_target()
 	users[username]={unit_id=unit.id,name=username}
@@ -274,7 +174,6 @@ function respond_new_user( username )
 		HTML_HEAD,dfhack.df2utf(dfhack.TranslateName(unit.name)),unit.id,HTML_END)
 end
 function respond_err()
-
 	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
 end
 function respond_help()
@@ -343,17 +242,18 @@ function respond_cookie(cmd)
 	end
 	return fill_page_data(page_data.cookie,{username=cmd.username,password=cmd.password}) --set cookies
 end
-function respond_play( cmd,cookies )
-
+function get_user(cmd, cookies)
 	if cookies.username==nil or cookies.username=="" or cookies.password~=users[cookies.username].password then
-		return page_data.intro.."Invalid login"..page_data.outro
+		return false,page_data.intro.."Invalid login"..page_data.outro
 	end
-
 	local user=users[cookies.username]
+	return user
+end
+function get_unit( user )
 	if user.unit_id==nil then
 		local u,u_id=pick_unused_target()
 		if u_id ==nil then
-			return page_data.intro.."Sorry, couldn't find a valid unit for you :("..page_data.outro
+			return false,page_data.intro.."Sorry, couldn't find a valid unit for you :("..page_data.outro
 		end
 		user.unit_id=u_id
 		unit_used[u_id]=true
@@ -361,8 +261,16 @@ function respond_play( cmd,cookies )
 
 	local t=df.unit.find(user.unit_id)
 	if t ==nil then
-		return page_data.intro.."Sorry, your unit was lost somewhere... :("..page_data.outro
+		return false,page_data.intro.."Sorry, your unit was lost somewhere... :("..page_data.outro
 	end
+	return t
+end
+function respond_play( cmd,cookies )
+
+	local user,err=get_user(cmd,cookies)
+	if not user then return err end
+	local t,err2=get_unit(user)
+	if not t then return err2 end
 
 	local w=15
 	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
@@ -398,12 +306,31 @@ function respond_play( cmd,cookies )
 end
 function respond_map(cmd,cookies)
 
-	--[[ --if map needed auth anytime
-	if cookies.username==nil or cookies.username=="" or cookies.password~=users[cookies.username] then
-		return page_data.intro.."Invalid login"..page_data.outro
+	local user,err=get_user(cmd,cookies)
+	if not user then return "[]" end --TODO somehow report error?
+	local t,err2=get_unit(user)
+	if not t then return "[]" end --TODO somehow report error?
+
+	local w=15
+	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
+	local line=0
+	local map_string=""
+	for i=0,#m,4 do
+		line=line+1
+		local comma
+		if i~=#m-3 then --omit last comma
+			comma=','
+		else
+			comma=''
+		end
+		map_string=map_string..string.format("[%d, %d, %d, %d]%s",m[i],m[i+1],m[i+2],m[i+3],comma)
+		if line==w then
+			line=0
+			map_string=map_string.."\n"
+		end
 	end
-	]]
-	return ""
+
+	return "["..map_string.."]"
 end
 function responses(request,cmd,cookies)
 
@@ -461,6 +388,7 @@ function parse_request( client )
 	if path==nil and other==nil then
 		path,other=s:match("POST /([^ ?]*)([^ ]*)")
 	end
+	printd("CON:",path)
 	if other~=nil then
 		local command={}
 		other=other:sub(2):gsub("%%20"," ")--drop '?' and fix spaces
@@ -474,8 +402,9 @@ function parse_request( client )
    			end
 		end
 		other=command
+		printd("Other:",#other)
 	end
-	printd("CON:",path,#other)
+
 
 	while s do
 		s=client:receive()
