@@ -285,11 +285,13 @@ function respond_cookie(cmd)
 	end
 	local user=users[cmd.username]
 	if user==nil then --create new user, if one does not exist
-		users[cmd.username]={password=cmd.password}
+		users[cmd.username]={password=cmd.password,name=cmd.username}
 		print("New user:"..cmd.username)
+		user=users[cmd.username]
 	elseif user.password~=cmd.password then --check password
 		return page_data.intro.."Invalid password"..page_data.outro
 	end
+	user.name=cmd.username
 	return fill_page_data(page_data.cookie,{username=cmd.username,password=cmd.password}) --set cookies
 end
 function get_user(cmd, cookies)
@@ -427,7 +429,7 @@ function respond_actual_new_unit(cmd,cookies)
 	end
 
 	local create_unit=dfhack.script_environment('modtools/create-unit')
-	print("Spawning:",actual_race.race_id,actual_race.caste_id,x,y,z)
+	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
 	local u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
 	if not u_id then
 		return page_data.intro.."Error: failed to create unit"..page_data.outro
@@ -525,6 +527,7 @@ function responses(request,cmd,cookies)
 	elseif request=='get_unit_list' then
 		return respond_json_unit_list(cmd,cookies)
 	else
+		print("Invalid request happened:",request)
 		printd("Request:",request)
 		printd("cmd:",cmd)
 		return respond_err()
@@ -603,7 +606,6 @@ function poke_clients()
 		if ok then
 			local r,alt=responses(req,cmd,cookies)
 			if r==nil and alt then
-				print("Sending alt",alt)
 				k:send(alt)
 			else
 				k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
