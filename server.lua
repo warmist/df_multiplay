@@ -342,7 +342,7 @@ function respond_json_map(cmd,cookies)
 	local t,err2=get_unit(user)
 	if not t then return "[]" end --TODO somehow report error?
 	--valid users unpause game for some time
-	
+
 	server_unpause()
 
 	local w=15
@@ -437,7 +437,18 @@ function respond_actual_new_unit(cmd,cookies)
 	user.unit_id=u_id
 
 	--return page_data.intro.."New unit spawned <a href='play'>Go back</a>"..page_data.outro
-	return respond_play(cmd,cookies) --TODO figure out redirect?
+	--return respond_play(cmd,cookies) --TODO figure out redirect?
+	return nil, "HTTP/1.1 302 Found\nLocation: "..HOST.."play\n\n"
+end
+function dir_signs( dx,dy )
+	local sx,sy
+	sx=0
+	sy=0
+	if dx>0 then sx=1 end
+	if dy>0 then sy=1 end
+	if dx<0 then sx=-1 end
+	if dy<0 then sy=-1 end
+	return sx,sy
 end
 function respond_json_move( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
@@ -450,10 +461,31 @@ function respond_json_move( cmd,cookies )
 	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
 	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
 	--TODO figure out dz by looking if you are going up ramp etc...
-	unit.idle_area.x=unit.pos.x+tonumber(cmd.dx)
-	unit.idle_area.y=unit.pos.y+tonumber(cmd.dy)
+	local dx=tonumber(cmd.dx)
+	local dy=tonumber(cmd.dy)
+	local tx=unit.pos.x+dx
+	local ty=unit.pos.y+dy
+	unit.idle_area.x=tx
+	unit.idle_area.y=ty
 	unit.idle_area_type=37 --Guard
 	unit.idle_area_threshold=0
+
+	if dfhack.maps.isValidTilePos(tx,ty,unit.pos.z) then
+		local attrs = df.tiletype.attrs
+		local tt=dfhack.maps.getTileType(tx,ty,unit.pos.z)
+		local td,to=dfhack.maps.getTileFlags(tx,ty,unit.pos.z)
+		--printall(attrs[tt])
+		--print(df.tiletype_shape[attrs[tt].shape])
+		if attrs[tt].shape==df.tiletype_shape.RAMP_TOP then --down is easy, just move down
+			unit.idle_area.z=unit.pos.z-1
+		elseif attrs[tt].shape==df.tiletype_shape.RAMP then --up is harder. Try stepping in same general direction...
+			local sx,sy=dir_signs(dx,dy)
+			unit.idle_area.x=unit.idle_area.x+sx
+			unit.idle_area.y=unit.idle_area.y+sy
+			unit.idle_area.z=unit.pos.z+1
+			---???
+		end
+	end
 
 	return "{}"
 end
@@ -569,8 +601,12 @@ function poke_clients()
 
 		local ok,req,cmd,cookies=parse_request(k)
 		if ok then
-			local r=responses(req,cmd,cookies)
-			k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
+			local r,alt=responses(req,cmd,cookies)
+			if alt then
+				k:send(alt)
+			else
+				k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
+			end
 			k:close()
 			removed_entries[k]=true
 		end
