@@ -602,7 +602,8 @@ function poke_clients()
 		local ok,req,cmd,cookies=parse_request(k)
 		if ok then
 			local r,alt=responses(req,cmd,cookies)
-			if alt then
+			if r==nil and alt then
+				print("Sending alt",alt)
 				k:send(alt)
 			else
 				k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
