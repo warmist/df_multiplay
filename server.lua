@@ -72,6 +72,41 @@ function load_page_data()
 		f:close()
 	end
 end
+local unit_data={}
+function find_caste( race_raw,caste_name )
+	for i,v in ipairs(race_raw.caste) do
+		if v.caste_id==caste_name then
+			return i,v
+		end
+	end
+end
+function load_buyables()
+	--flip the units raws
+	local raw=df.global.world.raws.creatures.all
+	local unit_raw={}
+	for k,v in ipairs(raw) do
+		unit_raw[v.creature_id]=v
+	end
+	local f=io.open('hack/scripts/http/unit_list.txt',rb)
+	local line_num=1
+	for l in f:lines() do
+		local race,caste,cost=l:match("([^:]*):(%a*)%s*(.*)")
+		if race==nil or caste==nil or cost==nil or tonumber(cost)==nil then
+			print("Error parsing line:",line_num,race,caste,tonumber(cost))
+		else
+			if unit_raw[race]==nil then
+				print("Could not find race:"..race)
+			else
+				local race_r=unit_raw[race]
+				local caste_id,caste_raw=find_caste(race_r,caste)
+				if caste_id==nil then print("Could not find caste:",caste, " for unit race:",race) else
+					table.insert(unit_data,{race=race_r,caste=caste_id,caste_raw=caste_raw,cost=tonumber(cost)})
+				end
+			end
+		end
+		line_num=line_num+1
+	end
+end
 function fill_page_data( page_text,variables )
 	function replace_vars( v )
 		local vname=v:sub(3,-3)
@@ -80,6 +115,7 @@ function fill_page_data( page_text,variables )
 	return page_text:gsub("(!![^!]+!!)",replace_vars)
 end
 load_page_data()
+load_buyables()
 users=users or {}
 unit_used=unit_used or {}
 port=port or sock.tcp:bind(HOST,6666)
@@ -241,6 +277,7 @@ function respond_cookie(cmd)
 	local user=users[cmd.username]
 	if user==nil then --create new user, if one does not exist
 		users[cmd.username]={password=cmd.password}
+		print("New user:"..cmd.username)
 	elseif user.password~=cmd.password then --check password
 		return page_data.intro.."Invalid password"..page_data.outro
 	end
@@ -363,6 +400,17 @@ function respond_json_move( cmd,cookies )
 
 	return "{}"
 end
+function respond_json_unit_list(cmd, cookies)
+	--{race=race_r,caste=caste_id,caste_raw=caste_raw,cost=tonumber(cost)}
+	local ret="["
+	local comma=''
+
+	for i,v in ipairs(unit_data) do
+		ret=ret..string.format("%s\n{race:'%s',caste:'%s',name:'%s',cost:%d}",comma,v.race.creature_id,v.caste_raw.caste_id,v.race.name[0],v.cost)
+		comma=','
+	end
+	return ret.."]"
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -383,6 +431,8 @@ function responses(request,cmd,cookies)
 		return respond_json_new_unit(cmd,cookies)
 	elseif request=='move_unit' then
 		return respond_json_move(cmd,cookies)
+	elseif request=='get_unit_list' then
+		return respond_json_unit_list(cmd,cookies)
 	else
 		printd("Request:",request)
 		printd("cmd:",cmd)
@@ -416,7 +466,7 @@ function parse_cookies( text )
 	return ret
 end
 function parse_request( client )
-	local s=client:receive()
+	local s=client:receive() --FIXME: this crashed, need pcall?
 	if s==nil then
 		return false
 	end
