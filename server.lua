@@ -332,12 +332,18 @@ function respond_play( cmd,cookies )
 
 	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
 end
+function server_unpause()
+	pause_countdown=10
+end
 function respond_json_map(cmd,cookies)
 
 	local user,err=get_user(cmd,cookies)
 	if not user then return "[]" end --TODO somehow report error?
 	local t,err2=get_unit(user)
 	if not t then return "[]" end --TODO somehow report error?
+	--valid users unpause game for some time
+	
+	server_unpause()
 
 	local w=15
 	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
@@ -466,8 +472,8 @@ function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
 		return page_data.favicon
-	elseif request=='help' then
-		return respond_help()
+	--elseif request=='help' then
+	--	return respond_help()
 	elseif request=='login' then
 		return respond_login()
 	elseif request=='dologin' then
@@ -573,17 +579,13 @@ function poke_clients()
 		clients[k]=nil
 	end
 end
-function server_unpause()
-	pause_countdown=10
-end
+
 function accept_connections(  )
 
 	while port:select(0,1) do
 		local c=port:accept()
 		--print("Opened Connection")
 		clients[c]=true
-		--TODO the server unpause should go only when there are logged in players
-		server_unpause()
 		c:setNonblocking()
 	end
 end
