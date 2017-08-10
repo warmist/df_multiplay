@@ -21,6 +21,8 @@ local map=require 'plugins.screenshot-map'
 local utils=require 'utils'
 local args={...}
 
+
+
 local HOST="http://dwarffort.duckdns.org/"
 local DEBUG=false
 if DEBUG then
@@ -58,7 +60,8 @@ function load_page_data()
 		'login',
 		'cookie',
 		'play',
-		'del_user'
+		'del_user',
+		'unit_select'
 	}
 	for i,v in ipairs(files) do
 		local f=io.open('hack/scripts/http/'..v..'.html','rb')
@@ -85,7 +88,7 @@ function load_buyables()
 	local raw=df.global.world.raws.creatures.all
 	local unit_raw={}
 	for k,v in ipairs(raw) do
-		unit_raw[v.creature_id]=v
+		unit_raw[v.creature_id]={raw=v,id=k}
 	end
 	local f=io.open('hack/scripts/http/unit_list.txt',rb)
 	local line_num=1
@@ -97,10 +100,16 @@ function load_buyables()
 			if unit_raw[race]==nil then
 				print("Could not find race:"..race)
 			else
-				local race_r=unit_raw[race]
+				local race_r=unit_raw[race].raw
+				local race_id=unit_raw[race].id
 				local caste_id,caste_raw=find_caste(race_r,caste)
 				if caste_id==nil then print("Could not find caste:",caste, " for unit race:",race) else
-					table.insert(unit_data,{race=race_r,caste=caste_id,caste_raw=caste_raw,cost=tonumber(cost)})
+					table.insert(unit_data,
+						{
+						race_raw=race_r,race_id=race_id,
+						caste_id=caste_id,caste_raw=caste_raw,
+						cost=tonumber(cost)
+						})
 				end
 			end
 		end
@@ -365,22 +374,64 @@ function respond_delete( cmd, cookies )
 		return fill_page_data(page_data.del_user,{username=cookies.username})
 	end
 end
-function respond_json_new_unit(cmd,cookies)
+function respond_new_unit(cmd,cookies)
+	local ret=page_data.intro..page_data.unit_select
+
+	for i,v in ipairs(unit_data) do
+		ret=ret..string.format("<option value=%d>%s %s cost:%d</option>\n",i,v.race_raw.name[0],v.caste_raw.caste_id,v.cost)
+	end
+	ret=ret.."</select></form>"
+	ret=ret.."<button type='submit' form='form1' value='submit'>Ask for new unit</button>\n"
+	return ret..page_data.outro
+end
+function get_valid_unit_pos(  )
+	local mx,my,mz=dfhack.maps.getTileSize()
+	local x,y,z
+	for i=1,100 do
+		x=math.random(0,mx-1)
+		y=math.random(0,my-1)
+		z=math.random(0,mz-1)
+		if dfhack.maps.isValidTilePos(x,y,z) then
+			local attrs = df.tiletype.attrs
+			local tt=dfhack.maps.getTileType(x,y,z)
+			local td,to=dfhack.maps.getTileFlags(x,y,z)
+			if tt and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+				return x,y,z
+			end
+		end
+	end
+end
+function respond_actual_new_unit(cmd,cookies)
 	local user,err=get_user(cmd,cookies)
-	if not user then return "{error='invalid_login'}" end --TODO somehow report error?
+	if not user then return err end
 
 	if user.unit_id then --release old one if we have one
 		unit_used[user.unit_id]=nil
 		user.unit_id=nil
 	end
 
-	local new_unit,u_id=get_unit(user)
-	if new_unit then
-		user.unit_id=u_id
-		return string.format("{unit_id=%d}",u_id)
-	else
-		return "{error='new_unit_failed'}"
+	if cmd.race_==nil or tonumber(cmd.race_)==nil or unit_data[tonumber(cmd.race_)]==nil then
+		return page_data.intro.."Error: invalid race selected"..page_data.outro
 	end
+	local actual_race=unit_data[tonumber(cmd.race_)]
+
+	local x,y,z=get_valid_unit_pos()
+	if not x then
+		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
+	end
+
+	local create_unit=dfhack.script_environment('modtools/create-unit')
+	print("Spawning:",actual_race.race_id,actual_race.caste_id,x,y,z)
+	local u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
+	if not u_id then
+		return page_data.intro.."Error: failed to create unit"..page_data.outro
+	end
+
+	unit_used[u_id]=true
+	user.unit_id=u_id
+
+	--return page_data.intro.."New unit spawned <a href='play'>Go back</a>"..page_data.outro
+	return respond_play(cmd,cookies) --TODO figure out redirect?
 end
 function respond_json_move( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
@@ -406,7 +457,7 @@ function respond_json_unit_list(cmd, cookies)
 	local comma=''
 
 	for i,v in ipairs(unit_data) do
-		ret=ret..string.format("%s\n{race:'%s',caste:'%s',name:'%s',cost:%d}",comma,v.race.creature_id,v.caste_raw.caste_id,v.race.name[0],v.cost)
+		ret=ret..string.format("%s\n{race:'%s',caste:'%s',name:'%s',cost:%d}",comma,v.race_raw.creature_id,v.caste_raw.caste_id,v.race_raw.name[0],v.cost)
 		comma=','
 	end
 	return ret.."]"
@@ -428,7 +479,9 @@ function responses(request,cmd,cookies)
 	elseif request=='delete'then
 		return respond_delete(cmd,cookies)
 	elseif request=='new_unit' then
-		return respond_json_new_unit(cmd,cookies)
+		return respond_new_unit(cmd,cookies)
+	elseif request=='submit_new_unit' then
+		return respond_actual_new_unit(cmd,cookies)
 	elseif request=='move_unit' then
 		return respond_json_move(cmd,cookies)
 	elseif request=='get_unit_list' then
