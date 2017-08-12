@@ -48,11 +48,13 @@ function add_item() {
 	var cur_mat=mat.options[mat.selectedIndex].value.split(',')
 
 	var item_select=document.getElementById("items_done")
-	item_select.options.add(new Option(cur_mat[2]+" "+cur_item[2]+" "+cur_mat[1]*cur_item[1],[it.selectedIndex+1,mat.selectedIndex+1],false))
+	item_select.options.add(new Option(cur_mat[2]+" "+cur_item[2]+" "+cur_mat[1]*cur_item[1],[it.selectedIndex+1,mat.selectedIndex+1,cur_mat[1]*cur_item[1]],false))
+	recalcCost()
 }
 function remove_item(){
 	var item_select=document.getElementById("items_done")
 	item_select.remove(item_select.selectedIndex);
+	recalcCost()
 }
 function get_races()
 {
@@ -70,10 +72,23 @@ function get_races()
 	xhttp.send();
 }
 function recalcCost() {
+	var cost_calc=document.getElementById("cost_calc")
+	var cost=0
 
+	var race_select=document.getElementById("race")
+	var cur_race=race_select.value.split(',')
+	cost+=Number(cur_race[1])
+
+	var item_select=document.getElementById("items_done")
+	for(i=0;i<item_select.length;i++)
+	{
+		var s=item_select.options[i].value.split(',')
+		cost+=Number(s[2])
+	}
+	cost_calc.innerHTML =Math.ceil(cost)
 }
 </script>
-<form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onclick="selectAll();">
+<form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onsubmit="selectAll();">
 Unit name:(alpha numeric only please:)<br>
 <input type="text" name="unit_name" form="form1" maxlength="10" pattern="[a-zA-Z0-9]+"><br>
 Race:<br>
@@ -85,7 +100,7 @@ Material:<select id="material"></select> Item:<select id="items"></select><br>
 </select>
 <br>
 <button onclick="remove_item()" type="button">Remove item</button><br>
-
+Cost:<div id="cost_calc"></div><br>
 <button type='submit' form='form1' value='submit' name='button1'>Ask for new unit</button>
 </form>
 
