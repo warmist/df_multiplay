@@ -85,7 +85,7 @@ function recalcCost() {
 		var s=item_select.options[i].value.split(',')
 		cost+=Number(s[2])
 	}
-	cost_calc.innerHTML =Math.ceil(cost)
+	cost_calc.innerHTML =Math.floor(cost)
 }
 </script>
 <form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onsubmit="selectAll();">

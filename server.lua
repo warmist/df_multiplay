@@ -518,23 +518,25 @@ function respond_actual_new_unit(cmd,cookies)
 
 
 	clear_items()
-	for i,v in ipairs(cmd.items) do
-		local sp=utils.split_string(v,"%%2C")
-		local item=tonumber(sp[1])
-		local mat=tonumber(sp[2])
-		--print(i,item,mat)
-		if item==nil then
-			print("Invalid item:"..v)
-		elseif mat==nil then
-			print("Invalid mat:"..v)
-		elseif item_data[item]==nil then
-			print("Item not found:"..v)
-		elseif mat_data[mat]==nil then
-			print("Mat not found:"..v)
-		else
-			local item_t=item_data[item]
-			local mat_t=mat_data[mat]
-			add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=1})
+	if cmd.items then
+		for i,v in ipairs(cmd.items) do
+			local sp=utils.split_string(v,"%%2C")
+			local item=tonumber(sp[1])
+			local mat=tonumber(sp[2])
+			--print(i,item,mat)
+			if item==nil then
+				print("Invalid item:"..v)
+			elseif mat==nil then
+				print("Invalid mat:"..v)
+			elseif item_data[item]==nil then
+				print("Item not found:"..v)
+			elseif mat_data[mat]==nil then
+				print("Mat not found:"..v)
+			else
+				local item_t=item_data[item]
+				local mat_t=mat_data[mat]
+				add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=1})
+			end
 		end
 	end
 	--str = str:gsub('%W','')
