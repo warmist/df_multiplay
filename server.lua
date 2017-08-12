@@ -325,7 +325,7 @@ function respond_play( cmd,cookies )
 	local t,err2=get_unit(user)
 	if not t then return err2 end
 
-	local w=15
+	local w=21
 	local valid_variables={
 		size=w,
 		canvas_w=w*16,
@@ -347,7 +347,7 @@ function respond_json_map(cmd,cookies)
 
 	server_unpause()
 
-	local w=15
+	local w=21
 	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
 	local line=0
 	local map_string=""
@@ -428,6 +428,7 @@ function respond_actual_new_unit(cmd,cookies)
 		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
 	end
 
+	--str = str:gsub('%W','')
 	local create_unit=dfhack.script_environment('modtools/create-unit')
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
 	local u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
@@ -435,6 +436,11 @@ function respond_actual_new_unit(cmd,cookies)
 		return page_data.intro.."Error: failed to create unit"..page_data.outro
 	end
 
+	if cmd.unit_name~=nil and cmd.unit_name~="" then
+		cmd.unit_name=cmd.unit_name:gsub('%W','')
+		local unit=df.unit.find(u_id)
+		unit.name.first_name=cmd.unit_name
+	end
 	unit_used[u_id]=true
 	user.unit_id=u_id
 
