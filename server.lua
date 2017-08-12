@@ -85,6 +85,39 @@ function find_caste( race_raw,caste_name )
 		end
 	end
 end
+local item_data={}
+function parse_item_token( text )
+	printd("Loading item:"..text)
+	local t_s,rest=text:match("([^:]*):(.*)")
+	if t_s==nil then return nil, "Invalid token" end
+	if df.item_type[t_s]==nil then return nil, "Could not find:"..t_s end
+
+
+	local cost
+	local rest,cost=rest:match("([^%s]*)%s*(.*)")
+	if cost==nil or tonumber(cost)==nil then return nil,"Invalid cost" end
+	cost=tonumber(cost)
+
+	local _,obj=utils.linear_index(df.global.world.raws.itemdefs.all,rest,"id")
+	if obj==nil then return nil,"Invalid subtype:"..rest end
+
+	local ret={type=df.item_type[t_s],subtype=obj.subtype,name=rest}
+
+	return ret,cost
+end
+local mat_data={}
+function parse_mat_token( text )
+	printd("Loading mat:"..text)
+	local t_s,cost=text:match("([^%s]*)%s*(.*)")
+	if t_s==nil then return nil, "Invalid token" end
+	local mat=dfhack.matinfo.find(t_s)
+	if mat==nil then return nil,"Could not find material:"..t_s end
+
+	if cost==nil or tonumber(cost)==nil then return nil,"Invalid cost" end
+	cost=tonumber(cost)
+
+	return mat,cost
+end
 function load_buyables()
 	--flip the units raws
 	local raw=df.global.world.raws.creatures.all
@@ -92,30 +125,65 @@ function load_buyables()
 	for k,v in ipairs(raw) do
 		unit_raw[v.creature_id]={raw=v,id=k}
 	end
-	local f=io.open('hack/scripts/http/unit_list.txt',rb)
-	local line_num=1
-	for l in f:lines() do
-		local race,caste,cost=l:match("([^:]*):(%a*)%s*(.*)")
-		if race==nil or caste==nil or cost==nil or tonumber(cost)==nil then
-			print("Error parsing line:",line_num,race,caste,tonumber(cost))
-		else
-			if unit_raw[race]==nil then
-				print("Could not find race:"..race)
+	--load units
+	do
+		local f=io.open('hack/scripts/http/unit_list.txt',rb)
+		local line_num=1
+		for l in f:lines() do
+			local race,caste,cost=l:match("([^:]*):(%a*)%s*(.*)")
+			if race==nil or caste==nil or cost==nil or tonumber(cost)==nil then
+				print("Error parsing line:",line_num,race,caste,tonumber(cost))
 			else
-				local race_r=unit_raw[race].raw
-				local race_id=unit_raw[race].id
-				local caste_id,caste_raw=find_caste(race_r,caste)
-				if caste_id==nil then print("Could not find caste:",caste, " for unit race:",race) else
-					table.insert(unit_data,
-						{
-						race_raw=race_r,race_id=race_id,
-						caste_id=caste_id,caste_raw=caste_raw,
-						cost=tonumber(cost)
-						})
+				if unit_raw[race]==nil then
+					print("Could not find race:"..race)
+				else
+					local race_r=unit_raw[race].raw
+					local race_id=unit_raw[race].id
+					local caste_id,caste_raw=find_caste(race_r,caste)
+					if caste_id==nil then print("Could not find caste:",caste, " for unit race:",race) else
+						table.insert(unit_data,
+							{
+							race_raw=race_r,race_id=race_id,
+							caste_id=caste_id,caste_raw=caste_raw,
+							cost=tonumber(cost)
+							})
+					end
 				end
 			end
+			line_num=line_num+1
 		end
-		line_num=line_num+1
+	end
+	--load items
+	do
+		local f=io.open('hack/scripts/http/equipment.txt',rb)
+		local line_num=1
+		for l in f:lines() do
+			if l:sub(1,1)~="#" then
+				local item,cost=parse_item_token(l)
+				if item==nil then
+					print("Error parsing line:",line_num,"Err:",cost)
+				else
+					table.insert(item_data,{type=item.type,subtype=item.subtype,cost=cost,name=item.name})
+				end
+			end
+			line_num=line_num+1
+		end
+	end
+	--load materials
+	do
+		local f=io.open('hack/scripts/http/materials.txt',rb)
+		local line_num=1
+		for l in f:lines() do
+			if l:sub(1,1)~="#" then
+				local mat,cost=parse_mat_token(l)
+				if mat==nil then
+					print("Error parsing line:",line_num,"Err:",cost)
+				else
+					table.insert(mat_data,{type=mat.type,index=mat.index,subtype=mat.subtype,cost=cost,name=mat.material.state_name.Solid})
+				end
+			end
+			line_num=line_num+1
+		end
 	end
 end
 function fill_page_data( page_text,variables )
@@ -134,7 +202,9 @@ port:setNonblocking()
 
 local clients={}
 local pause_countdown=0
-
+function make_redirect(loc)
+	return "HTTP/1.1 302 Found\nLocation: "..HOST..loc.."\n\n"
+end
 function get_window(x,y,z,w,h ) --maybe a fallback method?
 	local ret={}
 	local s=df.global.gps.screen
@@ -325,7 +395,9 @@ function respond_play( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
 	if not user then return err end
 	local t,err2=get_unit(user)
-	if not t then return err2 end
+	if not t then
+		return nil,make_redirect("new_unit")
+	end
 
 	local w=21
 	local valid_variables={
@@ -385,14 +457,7 @@ function respond_delete( cmd, cookies )
 	end
 end
 function respond_new_unit(cmd,cookies)
-	local ret=page_data.intro..page_data.unit_select
-
-	for i,v in ipairs(unit_data) do
-		ret=ret..string.format("<option value=%d>%s %s cost:%d</option>\n",i,v.race_raw.name[0],v.caste_raw.caste_id,v.cost)
-	end
-	ret=ret.."</select></form>"
-	ret=ret.."<button type='submit' form='form1' value='submit'>Ask for new unit</button>\n"
-	return ret..page_data.outro
+	return page_data.intro..page_data.unit_select..page_data.outro
 end
 function get_valid_unit_pos(  )
 	local mx,my,mz=dfhack.maps.getTileSize()
@@ -411,6 +476,22 @@ function get_valid_unit_pos(  )
 		end
 	end
 end
+function add_item(item_def)
+	local as=df.global.world.arena_spawn.equipment
+	as.item_types:insert("#",item_def.type)
+	as.item_subtypes:insert("#",item_def.subtype)
+	as.item_materials.mat_type:insert("#",item_def.mat_type)
+	as.item_materials.mat_index:insert("#",item_def.mat_index)
+	as.item_counts:insert("#",item_def.count)
+end
+function clear_items()
+	local as=df.global.world.arena_spawn.equipment
+	as.item_types:resize(0)
+	as.item_subtypes:resize(0)
+	as.item_materials.mat_type:resize(0)
+	as.item_materials.mat_index:resize(0)
+	as.item_counts:resize(0)
+end
 function respond_actual_new_unit(cmd,cookies)
 	local user,err=get_user(cmd,cookies)
 	if not user then return err end
@@ -419,17 +500,43 @@ function respond_actual_new_unit(cmd,cookies)
 		unit_used[user.unit_id]=nil
 		user.unit_id=nil
 	end
-
-	if cmd.race_==nil or tonumber(cmd.race_)==nil or unit_data[tonumber(cmd.race_)]==nil then
+	
+	--TODO: this is actually unnecessary if we make javascript send normal id not id,cost
+	local race
+	if cmd.race_~=nil then
+		race=cmd.race_:match("([^%%]+)") --remove "%C<STH>"
+	end
+	if race==nil or tonumber(race)==nil or unit_data[tonumber(race)]==nil then
 		return page_data.intro.."Error: invalid race selected"..page_data.outro
 	end
-	local actual_race=unit_data[tonumber(cmd.race_)]
+	local actual_race=unit_data[tonumber(race)]
 
 	local x,y,z=get_valid_unit_pos()
 	if not x then
 		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
 	end
 
+
+	clear_items()
+	for i,v in ipairs(cmd.items) do
+		local sp=utils.split_string(v,"%%2C")
+		local item=tonumber(sp[1])
+		local mat=tonumber(sp[2])
+		--print(i,item,mat)
+		if item==nil then
+			print("Invalid item:"..v)
+		elseif mat==nil then
+			print("Invalid mat:"..v)
+		elseif item_data[item]==nil then
+			print("Item not found:"..v)
+		elseif mat_data[mat]==nil then
+			print("Mat not found:"..v)
+		else
+			local item_t=item_data[item]
+			local mat_t=mat_data[mat]
+			add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=1})
+		end
+	end
 	--str = str:gsub('%W','')
 	local create_unit=dfhack.script_environment('modtools/create-unit')
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
@@ -448,7 +555,7 @@ function respond_actual_new_unit(cmd,cookies)
 
 	--return page_data.intro.."New unit spawned <a href='play'>Go back</a>"..page_data.outro
 	--return respond_play(cmd,cookies) --TODO figure out redirect?
-	return nil, "HTTP/1.1 302 Found\nLocation: "..HOST.."play\n\n"
+	return nil, make_redirect("play")
 end
 function dir_signs( dx,dy )
 	local sx,sy
@@ -505,7 +612,7 @@ function respond_json_unit_list(cmd, cookies)
 	local comma=''
 
 	for i,v in ipairs(unit_data) do
-		ret=ret..string.format("%s\n{race:'%s',caste:'%s',name:'%s',cost:%d}",comma,v.race_raw.creature_id,v.caste_raw.caste_id,v.race_raw.name[0],v.cost)
+		ret=ret..string.format('%s\n{"race":"%s","caste":"%s","name":"%s","cost":%d}',comma,v.race_raw.creature_id,v.caste_raw.caste_id,v.race_raw.name[0],v.cost)
 		comma=','
 	end
 	return ret.."]"
@@ -544,6 +651,26 @@ function respond_json_combat_log(cmd,cookies)
 	end
 	return ret.."]}"
 end
+function respond_json_materials( cmd,cookies )
+	local ret="["
+	local comma=''
+
+	for i,v in ipairs(mat_data) do
+		ret=ret..string.format('%s\n{"name":"%s","cost":%g}',comma,v.name,v.cost)
+		comma=','
+	end
+	return ret.."]"
+end
+function respond_json_items( cmd,cookies )
+	local ret="["
+	local comma=''
+
+	for i,v in ipairs(item_data) do
+		ret=ret..string.format('%s\n{"name":"%s","cost":%g}',comma,v.name,v.cost)
+		comma=','
+	end
+	return ret.."]"
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -570,6 +697,10 @@ function responses(request,cmd,cookies)
 		return respond_json_unit_list(cmd,cookies)
 	elseif request=='get_report_log' then
 		return respond_json_combat_log(cmd,cookies)
+	elseif request=='get_materials' then
+		return respond_json_materials(cmd,cookies)
+	elseif request=='get_items' then
+		return respond_json_items(cmd,cookies)
 	else
 		print("Invalid request happened:",request)
 		printd("Request:",request)
@@ -603,43 +734,79 @@ function parse_cookies( text )
 	end
 	return ret
 end
+function parse_content( other )
+	--printd("Content:"..other)
+	if other~=nil then
+		local command={}
+		other=other:gsub("%%20"," ")--drop '?' and fix spaces
+		for i in string.gmatch(other, "[^ &]+") do
+
+   			local eq=string.find(i,"=")
+
+   			if eq then
+   				local name=string.sub(i,1,eq-1)
+   				if name:sub(-6)=="%5B%5D" then --"[]" means array
+   					name=name:sub(1,-7)
+   					command[name]=command[name] or {}
+   					table.insert(command[name],string.sub(i,eq+1))
+   				else
+   					command[string.sub(i,1,eq-1)]=string.sub(i,eq+1)
+   				end
+   			else
+   				command[i]=true
+   			end
+		end
+		return command
+	end
+	
+end
 function parse_request( client )
+
 	local s=client:receive() --FIXME: this crashed, need pcall?
 	if s==nil then
 		return false
 	end
 	printd(s)
+	local is_post
+
 	local path,other=s:match("GET /([^ ?]*)([^ ]*)")
 	if path==nil and other==nil then
 		path,other=s:match("POST /([^ ?]*)([^ ]*)")
+		is_post=true
+		other={}
+	else
+		other=parse_content(other:sub(2))
 	end
 	printd("CON:",path)
-	if other~=nil then
-		local command={}
-		other=other:sub(2):gsub("%%20"," ")--drop '?' and fix spaces
-		for i in string.gmatch(other, "[^&]*") do
-   			--table.insert(command,i)
-   			local eq=string.find(i,"=")
-   			if eq then
-   				command[string.sub(i,1,eq-1)]=string.sub(i,eq+1)
-   			else
-   				command[i]=true
-   			end
-		end
-		other=command
-		printd("Other:",#other)
-	end
 
-
+	local post_length=0
 	while s do
 		s=client:receive()
 		if s then
+			if s==string.char(13) then
+				break
+			end
+			s=s:gsub(string.char(13),"")
+
 			local c=s:match("Cookie: (.*)")
 			if c then
 				cookies=parse_cookies(c)
 			end
+			if is_post then
+				local c=s:match("Content%-Length: (.*)")
+				if c and tonumber(c) then
+					post_length=tonumber(c)
+				end
+			end
 		end
 	end
+	if is_post then
+		s=client:receive(post_length)
+		if s then
+			other=parse_content(s)
+		end
+	end
+
 	return true,path,other,cookies
 end
 function poke_clients()
@@ -654,6 +821,9 @@ function poke_clients()
 			else
 				k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
 			end
+			k:close()
+			removed_entries[k]=true
+		else
 			k:close()
 			removed_entries[k]=true
 		end

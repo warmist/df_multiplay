@@ -1,8 +1,97 @@
 <script>
+
+
+var materials_select=document.getElementById("material")
+function selectAll() 
+    { 
+        selectBox = document.getElementById("items_done");
+
+        for (var i = 0; i < selectBox.options.length; i++) 
+        { 
+             selectBox.options[i].selected = true; 
+        } 
+    }
+function fill_items(argument) {
+	var item_select=document.getElementById("items")
+
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var item_list= JSON.parse(this.responseText);
+		item_list.forEach(function (e,i) {
+			item_select.options.add( new Option(e.name+" "+e.cost,[i+1,e.cost,e.name], false) );
+		})
+	}
+	};
+	xhttp.open("GET", "get_items", true);
+	xhttp.send();
+}
+function fill_materials(argument) {
+	var materials_select=document.getElementById("material")
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var mat_list= JSON.parse(this.responseText);
+		mat_list.forEach(function (e,i) {
+			materials_select.options.add( new Option(e.name+" x"+e.cost,[i+1,e.cost,e.name], false) );
+		})
+	}
+	};
+	xhttp.open("GET", "get_materials", true);
+	xhttp.send();
+}
+function add_item() {
+	var it=document.getElementById("items")
+	var mat=document.getElementById("material")
+
+	var cur_item=it.options[it.selectedIndex].value.split(',')
+	var cur_mat=mat.options[mat.selectedIndex].value.split(',')
+
+	var item_select=document.getElementById("items_done")
+	item_select.options.add(new Option(cur_mat[2]+" "+cur_item[2]+" "+cur_mat[1]*cur_item[1],[it.selectedIndex+1,mat.selectedIndex+1],false))
+}
+function remove_item(){
+	var item_select=document.getElementById("items_done")
+	item_select.remove(item_select.selectedIndex);
+}
+function get_races()
+{
+	var race_select=document.getElementById("race")
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var race_list= JSON.parse(this.responseText);
+		race_list.forEach(function (e,i) {
+			race_select.options.add( new Option(e.race+" "+e.caste+" "+e.cost,[i+1,e.cost], false) );
+		})
+	}
+	};
+	xhttp.open("GET", "get_unit_list", true);
+	xhttp.send();
+}
+function recalcCost() {
+
+}
 </script>
-<form action="/submit_new_unit" method="get" id="form1">
+<form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onclick="selectAll();">
 Unit name:(alpha numeric only please:)<br>
 <input type="text" name="unit_name" form="form1" maxlength="10" pattern="[a-zA-Z0-9]+"><br>
 Race:<br>
-<select id="race" name="race_" class="race_select" form="form1">
+<select id="race" name="race_" class="race_select" form="form1"></select><br>
+Material:<select id="material"></select> Item:<select id="items"></select><br>
+<button onclick="add_item()" type="button">Add item</button><br>
+<select id="items_done" name="items[]" form="form1" size="8" multiple>
 
+</select>
+<br>
+<button onclick="remove_item()" type="button">Remove item</button><br>
+
+<button type='submit' form='form1' value='submit' name='button1'>Ask for new unit</button>
+</form>
+
+
+<script type="text/javascript">
+	get_races()
+	fill_materials()
+	fill_items()
+</script>
