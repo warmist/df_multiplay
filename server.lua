@@ -22,9 +22,11 @@ local utils=require 'utils'
 local args={...}
 
 
-
 local HOST="http://dwarffort.duckdns.org/"
 local DEBUG=false
+local FPS_LIMIT=20
+
+
 if DEBUG then
 	printd=function ( ... )
 		print(...)
@@ -532,10 +534,12 @@ function respond_json_combat_log(cmd,cookies)
 	end
 	--print("Final last_seen:",last_seen)
 
-	local ret=string.format("{current_count:%d,log:[",#log)
+	local ret=string.format('{"current_count":%d,"log":[',#log)
 	local comma=''
 	for i=last_seen,#log-1 do
-		ret=ret..string.format("%s'%s'\n",comma,df.report.find(log[i]).text)
+		local text=df.report.find(log[i]).text
+		text=text:gsub('"','')
+		ret=ret..string.format('%s"%s"\n',comma,text)
 		comma=','
 	end
 	return ret.."]}"
@@ -679,5 +683,8 @@ function event_loop()
 	poke_clients()
 
 	timeout_looper=dfhack.timeout(10,'frames',event_loop)
+end
+if FPS_LIMIT then
+	df.global.enabler.fps=FPS_LIMIT
 end
 event_loop()

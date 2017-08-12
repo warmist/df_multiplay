@@ -117,8 +117,42 @@ c.onmousemove = function(e){
 }
 */
 update_map();
+/*
+	combat report stuff
+*/
+var combat_log={last_seen:0,text:[]}
+function add_max(a,e,m)
+{
+	return a.concat(e).slice(-m)
+}
+function update_log(){
+	element=document.getElementById("combat_log_div")
+	element.innerHTML=""
+	combat_log.text.forEach(function (el) {
+		element.innerHTML+=el+"<br>"
+	})
+}
+function get_combat_log(){
+
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var json_report= JSON.parse(this.responseText);
+		combat_log.last_seen=json_report.current_count
+		var print_lines=10
+		combat_log.text=add_max(combat_log.text,json_report.log,print_lines)
+		update_log()
+		setTimeout(get_combat_log, 200);
+	}
+	};
+	xhttp.open("GET", "get_report_log?last_seen="+combat_log.last_seen, true);
+	xhttp.send();
+}
+get_combat_log()
 </script>
 <button onclick="location.href = 'new_unit';">Ask for new unit</button> 
+<div id="combat_log_div">
 
+</div>
 
 
