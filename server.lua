@@ -508,6 +508,38 @@ function respond_json_unit_list(cmd, cookies)
 	end
 	return ret.."]"
 end
+function respond_json_combat_log(cmd,cookies)
+	--TODO: could ddos? find might be slow
+	local C_DEFAULT_LOGSIZE=20
+	local C_MAX_LOGSIZE=100
+
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end
+	local unit,err2=get_unit(user)
+	if not unit then return  "{error='invalid_unit'}" end
+	local log=unit.reports.log.Combat
+
+	local last_seen
+	if cmd.last_seen==nil or tonumber(cmd.last_seen)==nil then
+		last_seen=#log-C_DEFAULT_LOGSIZE
+	else
+		last_seen=tonumber(cmd.last_seen)
+	end
+	local reports = df.global.world.status.reports
+	if last_seen<0 then last_seen=0 end
+	if last_seen>#log or  #log-last_seen>C_MAX_LOGSIZE then
+		last_seen=#log-C_DEFAULT_LOGSIZE
+	end
+	--print("Final last_seen:",last_seen)
+
+	local ret=string.format("{current_count:%d,log:[",#log)
+	local comma=''
+	for i=last_seen,#log-1 do
+		ret=ret..string.format("%s'%s'\n",comma,df.report.find(log[i]).text)
+		comma=','
+	end
+	return ret.."]}"
+end
 function responses(request,cmd,cookies)
 
 	if request=='favicon.ico' then
@@ -532,6 +564,8 @@ function responses(request,cmd,cookies)
 		return respond_json_move(cmd,cookies)
 	elseif request=='get_unit_list' then
 		return respond_json_unit_list(cmd,cookies)
+	elseif request=='get_report_log' then
+		return respond_json_combat_log(cmd,cookies)
 	else
 		print("Invalid request happened:",request)
 		printd("Request:",request)
