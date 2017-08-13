@@ -539,7 +539,11 @@ function respond_actual_new_unit(cmd,cookies)
 			else
 				local item_t=item_data[item]
 				local mat_t=mat_data[mat]
-				add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=1})
+				local count=1
+				if item_t.type==df.item_type.AMMO then --hack for now...
+					count=20
+				end
+				add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=count})
 			end
 		end
 	end
