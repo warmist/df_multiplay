@@ -586,7 +586,8 @@ function respond_json_move( cmd,cookies )
 	local ty=unit.pos.y+dy
 	unit.idle_area.x=tx
 	unit.idle_area.y=ty
-	unit.idle_area_type=37 --Guard
+	--unit.idle_area_type=df.unit_station_type.Guard
+	unit.idle_area_type=df.unit_station_type.SquadMove
 	unit.idle_area_threshold=0
 
 	if dfhack.maps.isValidTilePos(tx,ty,unit.pos.z) then
