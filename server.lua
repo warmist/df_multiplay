@@ -24,7 +24,7 @@ local args={...}
 
 local HOST="http://dwarffort.duckdns.org/"
 local DEBUG=false
-local FPS_LIMIT=20
+local FPS_LIMIT=50
 
 
 if DEBUG then
@@ -571,11 +571,11 @@ function dir_signs( dx,dy )
 end
 function respond_json_move( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
-	if not user then return "{error='invalid_login'}" end
+	if not user then return '{"error"="invalid_login"}' end
 	local unit,err2=get_unit(user)
-	if not unit then return  "{error='invalid_unit'}" end
+	if not unit then return  '{"error"="invalid_unit"}' end
 
-	if unit.flags1.dead then return "{error='dead'}" end
+	if unit.flags1.dead then return '{"error"="dead"}' end
 
 	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
 	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
@@ -704,9 +704,10 @@ function responses(request,cmd,cookies)
 	elseif request=='get_items' then
 		return respond_json_items(cmd,cookies)
 	else
-		print("Invalid request happened:",request)
-		printd("Request:",request)
-		printd("cmd:",cmd)
+		if request~="" then
+			print("Invalid request happened:",request)
+			printd("cmd:",cmd)
+		end
 		return respond_err()
 	end
 
@@ -802,11 +803,16 @@ function parse_request( client )
 			end
 		end
 	end
-	if is_post then
-		s=client:receive(post_length)
-		if s then
-			other=parse_content(s)
+	if is_post and post_length then
+		print("Post length:",post_length)
+		if post_length~=0 then
+			s=client:receive(post_length)
+			if s then
+				other=parse_content(s)
+			end
 		end
+	elseif is_post and not post_length then
+		print("Warning: post request without content length")
 	end
 
 	return true,path,other,cookies
