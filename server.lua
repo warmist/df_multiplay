@@ -419,10 +419,14 @@ function respond_json_map(cmd,cookies)
 	if not t then return "[]" end --TODO somehow report error?
 	--valid users unpause game for some time
 
+	local delta_z=0
+	if cmd.dz and tonumber(cmd.dz) then
+		delta_z=tonumber(cmd.dz)
+	end
 	server_unpause()
 
 	local w=21
-	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z,w,w)
+	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z+delta_z,w,w)
 	local line=0
 	local map_string=""
 	for i=0,#m,4 do
@@ -579,7 +583,9 @@ function respond_json_move( cmd,cookies )
 
 	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
 	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
-	--TODO figure out dz by looking if you are going up ramp etc...
+	local dz=0
+	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
+
 	local dx=tonumber(cmd.dx)
 	local dy=tonumber(cmd.dy)
 	local tx=unit.pos.x+dx
@@ -587,10 +593,10 @@ function respond_json_move( cmd,cookies )
 	unit.idle_area.x=tx
 	unit.idle_area.y=ty
 	--unit.idle_area_type=df.unit_station_type.Guard
-	unit.idle_area_type=df.unit_station_type.SquadMove
+	unit.idle_area_type=df.unit_station_type.DungeonCommander
 	unit.idle_area_threshold=0
 
-	if dfhack.maps.isValidTilePos(tx,ty,unit.pos.z) then
+	if dfhack.maps.isValidTilePos(tx,ty,unit.pos.z) and dz==0 then
 		local attrs = df.tiletype.attrs
 		local tt=dfhack.maps.getTileType(tx,ty,unit.pos.z)
 		local td,to=dfhack.maps.getTileFlags(tx,ty,unit.pos.z)
@@ -605,6 +611,8 @@ function respond_json_move( cmd,cookies )
 			unit.idle_area.z=unit.pos.z+1
 			---???
 		end
+	else
+		unit.idle_area.z=unit.pos.z+dz
 	end
 
 	return "{}"
@@ -805,7 +813,7 @@ function parse_request( client )
 		end
 	end
 	if is_post and post_length then
-		print("Post length:",post_length)
+		printd("Post length:",post_length)
 		if post_length~=0 then
 			s=client:receive(post_length)
 			if s then
