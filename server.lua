@@ -71,7 +71,7 @@ function load_page_data()
 		page_data[v]=f:read('all')
 		f:close()
 	end
-	
+
 	do
 		local f=io.open('hack/scripts/http/favicon.png','rb')
 		page_data.favicon=f:read('all')
@@ -196,7 +196,7 @@ function fill_page_data( page_text,variables )
 end
 load_page_data()
 load_buyables()
-users=users or {{name="Test",password="test"}}
+users=users or {Test={name="Test",password="test"}}
 unit_used=unit_used or {}
 port=port or sock.tcp:bind(HOST,6666)
 port:setNonblocking()
@@ -206,82 +206,6 @@ local pause_countdown=0
 function make_redirect(loc)
 	return "HTTP/1.1 302 Found\nLocation: "..HOST..loc.."\n\n"
 end
-function get_window(x,y,z,w,h ) --maybe a fallback method?
-	local ret={}
-	local s=df.global.gps.screen
-	local ww=df.global.gps.dimx
-	local wh=df.global.gps.dimy
-	local i=0
-	for yy=y,y+h-1 do
-	for xx=x,x+w-1 do
-		local t=xx*wh+yy
-		for j=0,3 do
-			ret[i]=s[t*4+j]
-			i=i+1
-		end
-	end
-	end
-	return ret
-end
-function pick_unused_target()
-	local u=df.global.world.units.active
-	if #u==0 then
-		return
-	end
-	local count=0
-	local id
-	while id==nil and count<100 do
-		id=math.random(0,#u-1)
-		if unit_used[id] then
-			id=nil
-		elseif not u[id] or u[id].flags1.dead then
-			id=nil
-		else
-			--check if unit is civ?
-			return u[id],u[id].id
-		end
-		count=count+1
-	end
-	return id
-end
-
-function unit_info(user, u )
-	local uname=dfhack.df2utf(dfhack.TranslateName(u.name))
-	local prof=dfhack.units.getProfessionName(u)
-	local job
-	if u.job.current_job then
-		job=dfhack.job.getName(u.job.current_job)
-	else
-		job="no job"
-	end
-	local ret=string.format('<div class="unit">%s (%s)</div><div class="job"> %s</div><div class="labors"> Labors:<ul>',uname,prof,job)
-	for i,v in ipairs(u.status.labors) do
-		if df.unit_labor.attrs[i].caption~=nil then
-			local num=1
-			if v then
-				num=0
-			end
-			ret=ret..string.format("<li>%s : <a href='%s?labor=%d:%d'>%s</a></li>",df.unit_labor.attrs[i].caption,
-				user.name,i,num,v)
-		end
-	end
-	ret=ret..'</ul>\n'
-	ret=ret..'<div class="labors"> Burrows:<ul>'
-	for i,v in ipairs(df.global.ui.burrows.list) do
-		local in_burrow_text="add"
-		local in_burrow_state=1
-		if dfhack.burrows.isAssignedUnit(v,u) then
-			in_burrow_text="remove"
-			in_burrow_state=0
-		end
-		ret=ret..string.format("<li>%s : <a href='%s?burrow=%d:%d'>%s</a></li>",v.name,
-			user.name,v.id,in_burrow_state,in_burrow_text)
-	end
-	ret=ret.."</ul>\n";
-	return ret
-
-end
-
 function respond_err()
 	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
 end
