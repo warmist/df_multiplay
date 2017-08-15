@@ -244,14 +244,7 @@ function pick_unused_target()
 	end
 	return id
 end
-local HTML_HEAD=[==[<html><head><meta charset="utf-8"/><style>
-body{
-	font-family: monospace; 
-	background-color: #000000;
-	margin:0px;
-	color: #FF0000;
-}</style></head><body>]==]
-local HTML_END="</body></html>"
+
 function unit_info(user, u )
 	local uname=dfhack.df2utf(dfhack.TranslateName(u.name))
 	local prof=dfhack.units.getProfessionName(u)
@@ -288,33 +281,11 @@ function unit_info(user, u )
 	return ret
 
 end
-function respond_new_user( username )
-	local unit=pick_target()
-	users[username]={unit_id=unit.id,name=username}
-	print("New user:"..username)
-	return string.format("%s You were assigned unit: %s (%d). %s",
-		HTML_HEAD,dfhack.df2utf(dfhack.TranslateName(unit.name)),unit.id,HTML_END)
-end
+
 function respond_err()
 	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
 end
-function respond_help()
-	local r=""
-	local choices={
-	{"help","Print this help"},
-	{"new_unit","Assign a new random unit"},
-	{"labor=id:value","Set labor on or off"},
-	{"burrow=id:value","Add or remove from burrow"},
-	{"delete","deletes all user data"},
-}
-	for i,v in ipairs(choices) do
-		r=r..string.format("<li>%s : %s</li>\n",v[1],v[2])
-	end
-	return string.format("%s <ul> %s </ul>%s",HTML_HEAD, r ,HTML_END)
-end
-function starts_with( s,prefix )
-	return s:sub(1,#prefix)==prefix
-end
+
 function switch_labor(user,labor,value )
 	labor=tonumber(labor)
 	value=tonumber(value)
@@ -343,10 +314,6 @@ function perform_commands(user, cmd )
 		switch_labor(user,cmd:match("labor=([^:]+):([01])"))
 	elseif starts_with(cmd,"burrow=") then
 		switch_burrow(user,cmd:match("burrow=([^:]+):([01])"))
-	elseif cmd=="delete" then
-		print("Deleting user:",user.name)
-		users[user.name]=nil
-		return HTML_HEAD.. "User deleted" .. HTML_END
 	end
 end
 function respond_login()
@@ -376,13 +343,6 @@ function get_user(cmd, cookies)
 end
 function get_unit( user )
 	if user.unit_id==nil then
-		--[[local u,u_id=pick_unused_target()
-		if u_id ==nil then
-			return false,page_data.intro.."Sorry, couldn't find a valid unit for you :("..page_data.outro
-		end
-		user.unit_id=u_id
-		unit_used[u_id]=true
-		return u,u_id]]
 		return
 	end
 
@@ -412,6 +372,37 @@ function respond_play( cmd,cookies )
 end
 function server_unpause()
 	pause_countdown=10
+end
+function json_str( v )
+	if type(v)=="string" then
+		return '"'..v..'"'
+	elseif type(v)=="number" then
+		return v
+	elseif type(v)=="boolean" then
+		return v
+	elseif type(v)=="table" and v._is_array==nil then
+		return json_pack_obj(v)
+	elseif type(v)=="table" and v._is_array then
+		return json_pack_arr(v,v._is_array)
+	end
+end
+function json_pack_arr( t,start )
+	local ret=""
+	local comma=""
+	for i=start,#t-(1-start) do
+		ret=ret..string.format('%s%s\n',comma,json_str(t[i]))
+		comma=','
+	end
+	return string.format("[%s]",ret)
+end
+function json_pack_obj( t)
+	local ret=""
+	local comma=""
+	for k,v in pairs(t) do
+		ret=ret..string.format('%s"%s":%s\n',comma,k,json_str(v))
+		comma=','
+	end
+	return string.format("{%s}",ret)
 end
 function respond_json_map(cmd,cookies)
 
@@ -447,6 +438,41 @@ function respond_json_map(cmd,cookies)
 	end
 
 	return '{"map":['..map_string..']}'
+end
+function respond_json_unit_info(cmd,cookies)
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error":"Invalid user"}' end --TODO somehow report error?
+	local unit,err2=get_unit(user)
+	if not unit then return '{"error":"Invalid unit"}' end --TODO somehow report error?
+
+	local uname=dfhack.df2utf(dfhack.TranslateName(unit.name))
+	local prof=dfhack.units.getProfessionName(unit)
+	local job
+	if unit.job.current_job then
+		job=dfhack.job.getName(unit.job.current_job)
+	else
+		job=""
+	end
+	local ret={}
+	ret.name=uname
+	ret.profession=prof
+	ret.job=job
+	ret.labors={_is_array=0}
+	for i,v in ipairs(unit.status.labors) do
+		--if df.unit_labor.attrs[i].caption~=nil then
+			--ret.labors[df.unit_labor.attrs[i].caption]=v
+		--end
+		ret.labors[i]=v
+	end
+	ret.burrows={}
+	for i,v in ipairs(df.global.ui.burrows.list) do
+		local in_burrow_state=0
+		if dfhack.burrows.isAssignedUnit(v,unit) then
+			in_burrow_state=1
+		end
+		ret.burrows[v.name]={id=v.id,name=v.name,state=in_burrow_state}
+	end
+	return json_pack_obj(ret)
 end
 function respond_delete( cmd, cookies )
 	local user,err=get_user(cmd,cookies)
@@ -742,6 +768,8 @@ function responses(request,cmd,cookies)
 		return respond_json_items(cmd,cookies)
 	elseif request=='get_kills' then
 		return respond_json_kills(cmd,cookies)
+	elseif request=="get_unit_info" then
+		return respond_json_unit_info(cmd,cookies)
 	elseif request=='fake_error' and DEBUG then
 		error("inside responses")
 	else
