@@ -611,10 +611,13 @@ function respond_json_combat_log(cmd,cookies)
 	local comma=''
 	if #log>0 then
 		for i=last_seen,#log-1 do
-			local text=df.report.find(log[i]).text
-			text=text:gsub('"','')
-			ret=ret..string.format('%s"%s"\n',comma,text)
-			comma=','
+			local report=df.report.find(log[i])
+			if report then
+			local text=report.text
+				text=text:gsub('"','')
+				ret=ret..string.format('%s"%s"\n',comma,text)
+				comma=','
+			end
 		end
 	end
 	return ret.."]}"
