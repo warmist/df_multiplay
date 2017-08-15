@@ -14,6 +14,33 @@ function getCookie(cname) {
     }
     return "";
 }
+function add_kill(k)
+{
+    var ul=document.getElementById("hs_list")
+    var li=document.createElement("li")
+    li.appendChild(document.createTextNode(k.name+" "+k.kills))
+    ul.appendChild(li)
+}
+function get_highscore() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+    if (this.readyState == 4) {
+        if(this.status==200)
+        {
+            var kills= JSON.parse(this.responseText);
+            kills.sort(function (a,b) {
+                return b.kills-a.kills
+            })
+            for (var i = 0; i < Math.min(kills.length,10); i++) {
+                add_kill(kills[i])
+            }
+            
+        }
+    }
+    };
+    xhttp.open("GET", "get_kills", true);
+    xhttp.send();
+}
 </script>
 <header>
 <h1>Dwarf fortress<h1>
@@ -28,4 +55,12 @@ function getCookie(cname) {
 		document.getElementById("user_play").innerHTML = "<p> Welcome back "+user+". Would you like to <a href=play>Play</a>?</p>"
 	}
 </script>
-
+<div id='highscore'>
+Highscore:
+    <ul id="hs_list">
+        
+    </ul>
+</div>
+<script type="text/javascript">
+    get_highscore()
+</script>

@@ -25,6 +25,8 @@ local args={...}
 
 local HOST="http://dwarffort.duckdns.org/"
 local DEBUG=false
+local ADVENTURE=false
+local FORTMODE=false
 local FPS_LIMIT=50
 
 
@@ -118,6 +120,20 @@ function parse_mat_token( text )
 	cost=tonumber(cost)
 
 	return mat,cost
+end
+local spawn_burrow
+if FORTMODE then
+	function find_spawn( )
+		local b=df.global.ui.burrows.list
+		for i,v in ipairs(b) do
+			if v.name=="SPAWN" then
+				spawn_burrow=v
+				return
+			end
+		end
+		print("WARN: SPAWN burrow not found")
+	end
+	find_spawn()
 end
 function load_buyables()
 	--flip the units raws
@@ -422,18 +438,38 @@ function respond_new_unit(cmd,cookies)
 	return page_data.intro..page_data.unit_select..page_data.outro
 end
 function get_valid_unit_pos(  )
-	local mx,my,mz=dfhack.maps.getTileSize()
 	local x,y,z
-	for i=1,100 do
-		x=math.random(0,mx-1)
-		y=math.random(0,my-1)
-		z=math.random(0,mz-1)
-		if dfhack.maps.isValidTilePos(x,y,z) then
-			local attrs = df.tiletype.attrs
-			local tt=dfhack.maps.getTileType(x,y,z)
-			local td,to=dfhack.maps.getTileFlags(x,y,z)
-			if tt and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
-				return x,y,z
+	if FORTMODE then
+		for i=1,100 do
+			--TODO: CHECK IF TILE IN BURROW
+			local bx=spawn_burrow.block_x[math.random(0,#spawn_burrow.block_x-1)]-df.global.world.map.region_x*3
+			local by=spawn_burrow.block_y[math.random(0,#spawn_burrow.block_y-1)]-df.global.world.map.region_y*3
+			local bz=spawn_burrow.block_z[math.random(0,#spawn_burrow.block_z-1)]-df.global.world.map.region_z
+			x=math.random(bx*16,bx*16+15)
+			y=math.random(by*16,by*16+15)
+			z=bz
+			if dfhack.maps.isValidTilePos(x,y,z) then
+				local attrs = df.tiletype.attrs
+				local tt=dfhack.maps.getTileType(x,y,z)
+				local td,to=dfhack.maps.getTileFlags(x,y,z)
+				if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+					return x,y,z
+				end
+			end
+		end
+	else
+		local mx,my,mz=dfhack.maps.getTileSize()
+		for i=1,1000 do
+			x=math.random(0,mx-1)
+			y=math.random(0,my-1)
+			z=math.random(0,mz-1)
+			if dfhack.maps.isValidTilePos(x,y,z) then
+				local attrs = df.tiletype.attrs
+				local tt=dfhack.maps.getTileType(x,y,z)
+				local td,to=dfhack.maps.getTileFlags(x,y,z)
+				if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+					return x,y,z
+				end
 			end
 		end
 	end
@@ -508,7 +544,12 @@ function respond_actual_new_unit(cmd,cookies)
 	--str = str:gsub('%W','')
 	local create_unit=dfhack.script_environment('modtools/create-unit')
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
-	local u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
+	local u_id
+	if FORTMODE then
+		u_id=create_unit.createUnitInFortCivAndGroup(actual_race.race_id,actual_race.caste_id,{x,y,z})
+	else
+		u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
+	end
 	if not u_id then
 		return page_data.intro.."Error: failed to create unit"..page_data.outro
 	end
@@ -547,6 +588,7 @@ function respond_json_move( cmd,cookies )
 	local dz=0
 	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
 
+	
 	local dx=tonumber(cmd.dx)
 	local dy=tonumber(cmd.dy)
 	local tx=unit.pos.x+dx
@@ -554,7 +596,8 @@ function respond_json_move( cmd,cookies )
 	unit.idle_area.x=tx
 	unit.idle_area.y=ty
 	--unit.idle_area_type=df.unit_station_type.Guard
-	unit.idle_area_type=df.unit_station_type.DungeonCommander
+	--unit.idle_area_type=df.unit_station_type.DungeonCommander
+	unit.idle_area_type=df.unit_station_type.SquadMove
 	unit.idle_area_threshold=0
 
 	if dfhack.maps.isValidTilePos(tx,ty,unit.pos.z) and dz==0 then
@@ -575,7 +618,11 @@ function respond_json_move( cmd,cookies )
 	else
 		unit.idle_area.z=unit.pos.z+dz
 	end
-
+	unit.path.dest={x=unit.idle_area.x,y=unit.idle_area.y,z=unit.idle_area.z}
+	unit.path.goal=88 --SQUAD STATION
+	unit.path.path.x:resize(0)
+	unit.path.path.y:resize(0)
+	unit.path.path.z:resize(0)
 	return "{}"
 end
 function respond_json_unit_list(cmd, cookies)
@@ -652,18 +699,17 @@ function respond_json_kills( cmd,cookies )
 	local ret="["
 	local comma=''
 
-	for i,v in ipairs(df.global.world.units.active) do
-		local hf_id=v.hist_figure_id
-		local kills=0
-		if hf_id~=-1 then
-			local hf=df.historical_figure.find(hf_id)
-			if hf.info and hf.info.kills then
-				for i,v in ipairs(hf.info.kills.killed_count) do
-					kills=kills+v
-				end
-			end
+	local kills={}
+	for i,v in ipairs(df.global.world.incidents.all) do
+		local killer=v.killer
+		if killer~=-1 then
+			kills[killer]=kills[killer] or 0
+			kills[killer]=kills[killer]+1
 		end
-		ret=ret..string.format('%s\n{"name":"%s","kills":%d}',comma,v.name.first_name,kills)
+	end
+	for k,v in pairs(kills) do
+		local u=df.unit.find(k)
+		ret=ret..string.format('%s\n{"name":"%s","kills":%d}',comma,u.name.first_name,v)
 		comma=','
 	end
 	return ret.."]"
@@ -850,6 +896,32 @@ function accept_connections(  )
 		c:setNonblocking()
 	end
 end
+function center_adventurer()
+	local c={0,0,0}
+	local count=0
+	for k,v in pairs(users) do
+		local u=get_unit(v)
+		if u and not u.flags1.dead then
+			c[1]=c[1]+u.pos.x
+			c[2]=c[2]+u.pos.y
+			c[3]=c[3]+u.pos.z
+			count=count+1
+		end
+	end
+	if count==0 then
+		return
+	end
+
+	c[1]=c[1]/count
+	c[2]=c[2]/count
+	c[3]=c[3]/count
+	local units=df.global.world.units.active
+	if #units>0 then
+		units[0].pos.x=c[1]
+		units[0].pos.y=c[2]
+		units[0].pos.z=0
+	end
+end
 function event_loop()
 	accept_connections()
 	if pause_countdown>0 then
@@ -859,7 +931,9 @@ function event_loop()
 		df.global.pause_state=true
 	end
 	poke_clients()
-
+	if ADVENTURE then
+		center_adventurer()
+	end
 	timeout_looper=dfhack.timeout(10,'frames',event_loop)
 end
 if FPS_LIMIT then
