@@ -456,7 +456,7 @@ function respond_actual_new_unit(cmd,cookies)
 		unit_used[user.unit_id]=nil
 		user.unit_id=nil
 	end
-	
+
 	--TODO: this is actually unnecessary if we make javascript send normal id not id,cost
 	local race
 	if cmd.race_~=nil then
@@ -515,8 +515,7 @@ function respond_actual_new_unit(cmd,cookies)
 	unit_used[u_id]=true
 	user.unit_id=u_id
 	df.global.ui.follow_unit=u_id
-	--return page_data.intro.."New unit spawned <a href='play'>Go back</a>"..page_data.outro
-	--return respond_play(cmd,cookies) --TODO figure out redirect?
+
 	return nil, make_redirect("play")
 end
 function dir_signs( dx,dy )
@@ -661,7 +660,7 @@ function respond_json_kills( cmd,cookies )
 	return ret.."]"
 end
 function responses(request,cmd,cookies)
-
+	--TODO make table with all keys as valid responses
 	if request=='favicon.ico' then
 		return page_data.favicon
 	--elseif request=='help' then
