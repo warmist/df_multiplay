@@ -212,7 +212,7 @@ end
 function make_json_content( r )
 	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s",#r,r)
 end
-function respond_err()
+function respond_err() --TODO: actual error page?
 	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
 end
 
@@ -669,54 +669,52 @@ function respond_json_kills( cmd,cookies )
 	return ret.."]"
 end
 function responses(request,cmd,cookies)
-	--TODO make table with all keys as valid responses
-	function json_response(f)
-		local js=f(cmd,cookies)
-		return nil,make_json_content(js)
-	end
 	--------------------MISC RESPONSES
-	if request=='favicon.ico' then
-		return page_data.favicon
-	elseif request=='fake_error' and DEBUG then
-		error("inside responses")
-	--------------------JSON RESPONSES
-	elseif request=='map' then
-		return json_response(respond_json_map)
-	elseif request=='move_unit' then
-		return json_response(respond_json_move)
-	elseif request=='get_unit_list' then
-		return json_response(respond_json_unit_list)
-	elseif request=='get_report_log' then
-		return json_response(respond_json_combat_log)
-	elseif request=='get_materials' then
-		return json_response(respond_json_materials)
-	elseif request=='get_items' then
-		return json_response(respond_json_items)
-	elseif request=='get_kills' then
-		return json_response(respond_json_kills)
-	elseif request=="get_unit_info" then
-		return json_response(respond_json_unit_info)
+	local table_misc={
+		["favicon.ico"]=function() return page_data.favicon end,
+		fake_error=function () error("inside responses") end
+	}
 
-	elseif request=='login' then
-		return respond_login()
-	elseif request=='dologin' then
-		return respond_cookie(cmd)
-	elseif request=='play' then
-		return respond_play(cmd,cookies)
-	
-	elseif request=='delete'then
-		return respond_delete(cmd,cookies)
-	elseif request=='new_unit' then
-		return respond_new_unit(cmd,cookies)
-	elseif request=='submit_new_unit' then
-		return respond_actual_new_unit(cmd,cookies)
-	else
-		if request~="" and request~=nil then
-			print("Invalid request happened:",request)
-			printd("cmd:",cmd)
-		end
-		return respond_err()
+	local tm=table_misc[request]
+	if tm then
+		return tm(cmd,cookies)
 	end
+	--------------------JSON RESPONSES
+	local table_json={
+	map=respond_json_map,
+	move_unit=respond_json_move,
+	get_unit_list=respond_json_unit_list,
+	get_report_log=respond_json_combat_log,
+	get_materials=respond_json_materials,
+	get_items=respond_json_items,
+	get_kills=respond_json_kills,
+	get_unit_info=respond_json_unit_info,
+	}
+
+	local tj=table_json[request]
+	if tj then
+		return nil,make_json_content(tj(cmd,cookies))
+	end
+	--------------------PAGE RESPONSES
+	local table_page={
+	login=respond_login,
+	dologin=respond_cookie,
+	play=respond_play,
+	delete=respond_delete,
+	new_unit=respond_new_unit,
+	submit_new_unit=respond_actual_new_unit,
+	}
+
+	local tp=table_page[request]
+	if tp then
+		return tp(cmd,cookies)
+	end
+	--------------------INVALID AND HOME PAGE
+	if request~="" and request~=nil then
+		print("Invalid request happened:",request)
+		printd("cmd:",cmd)
+	end
+	return respond_err()
 end
 function parse_cookies( text )
 	local ret={}
