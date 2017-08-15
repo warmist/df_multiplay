@@ -30,9 +30,18 @@ var movement={
 	Numpad6:[1,0],
 	Numpad9:[1,-1]
 }
-
-document.onkeypress=function (key) {
+function isNil(value) {
+  return value == undefined;
+}
+//document.onkeypress=function (key) {
 	//TODO: keyrepeat is too fast. Need to track keydown/keyup and send AJAX on timer
+//
+var cur_movement
+document.onkeydown=function (key) {
+	cur_movement=movement[key.code]
+}
+document.onkeyup=function (key) {
+	cur_movement=null
 }
 function color(id){
 	var c=color_map[id]
@@ -77,6 +86,19 @@ function draw_map(){
 		draw_bg(x,y,t[2]);
 	}
 }
+function key_movement(){
+	if(!isNil(cur_movement))
+	{
+		move_unit(cur_movement[0],cur_movement[1],view_dz,function () {
+			setTimeout(key_movement, 100);
+		})
+	}
+	else
+	{
+		setTimeout(key_movement, 100);
+	}
+}
+key_movement()
 function update_map() {
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
@@ -104,29 +126,28 @@ function get_new_unit() {
 	xhttp.send();
 }
 var mouse_pos={x:0,y:0}
-function move_unit() {
+function move_unit(dx,dy,dz,on_done) {
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4 && this.status == 200) {
-		//do sth?
+	if (this.readyState == 4 ) {
+		if(!isNil(on_done))
+			on_done(this.status == 200);
 	}
 	};
-	xhttp.open("GET", "move_unit?dx="+mouse_pos.x+"&dy="+mouse_pos.y+"&dz="+view_dz, true);
+	xhttp.open("GET", "move_unit?dx="+dx+"&dy="+dy+"&dz="+dz, true);
 	xhttp.send();
 }
 var mouseIsDown = false;
 function update_mouse(e) {
-	console.log("Pos:"+e.x+" "+e.y);
 	var cx=Math.floor(e.x/tile_x)-(canvas_tile_count-1)/2;
 	var cy=Math.floor(e.y/tile_y)-(canvas_tile_count-1)/2;
-	console.log("Tile Pos:"+cx+" "+cy);
 	mouse_pos={x:cx,y:cy}
 }
 c.onmousedown = function(e){
 	update_mouse(e)
     //dragOffset.x = e.x - mainLayer.trans.x;
     //dragOffset.y = e.y - mainLayer.trans.y;
-    move_unit()
+    move_unit(mouse_pos.x,mouse_pos.y,view_dz)
     mouseIsDown = true;
 }
 

@@ -206,6 +206,12 @@ local pause_countdown=0
 function make_redirect(loc)
 	return "HTTP/1.1 302 Found\nLocation: "..HOST..loc.."\n\n"
 end
+function make_content(r)
+	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
+end
+function make_json_content( r )
+	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s",#r,r)
+end
 function respond_err()
 	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
 end
@@ -664,40 +670,46 @@ function respond_json_kills( cmd,cookies )
 end
 function responses(request,cmd,cookies)
 	--TODO make table with all keys as valid responses
+	function json_response(f)
+		local js=f(cmd,cookies)
+		return nil,make_json_content(js)
+	end
+	--------------------MISC RESPONSES
 	if request=='favicon.ico' then
 		return page_data.favicon
-	--elseif request=='help' then
-	--	return respond_help()
+	elseif request=='fake_error' and DEBUG then
+		error("inside responses")
+	--------------------JSON RESPONSES
+	elseif request=='map' then
+		return json_response(respond_json_map)
+	elseif request=='move_unit' then
+		return json_response(respond_json_move)
+	elseif request=='get_unit_list' then
+		return json_response(respond_json_unit_list)
+	elseif request=='get_report_log' then
+		return json_response(respond_json_combat_log)
+	elseif request=='get_materials' then
+		return json_response(respond_json_materials)
+	elseif request=='get_items' then
+		return json_response(respond_json_items)
+	elseif request=='get_kills' then
+		return json_response(respond_json_kills)
+	elseif request=="get_unit_info" then
+		return json_response(respond_json_unit_info)
+
 	elseif request=='login' then
 		return respond_login()
 	elseif request=='dologin' then
 		return respond_cookie(cmd)
 	elseif request=='play' then
 		return respond_play(cmd,cookies)
-	elseif request=='map' then
-		return respond_json_map(cmd,cookies)
+	
 	elseif request=='delete'then
 		return respond_delete(cmd,cookies)
 	elseif request=='new_unit' then
 		return respond_new_unit(cmd,cookies)
 	elseif request=='submit_new_unit' then
 		return respond_actual_new_unit(cmd,cookies)
-	elseif request=='move_unit' then
-		return respond_json_move(cmd,cookies)
-	elseif request=='get_unit_list' then
-		return respond_json_unit_list(cmd,cookies)
-	elseif request=='get_report_log' then
-		return respond_json_combat_log(cmd,cookies)
-	elseif request=='get_materials' then
-		return respond_json_materials(cmd,cookies)
-	elseif request=='get_items' then
-		return respond_json_items(cmd,cookies)
-	elseif request=='get_kills' then
-		return respond_json_kills(cmd,cookies)
-	elseif request=="get_unit_info" then
-		return respond_json_unit_info(cmd,cookies)
-	elseif request=='fake_error' and DEBUG then
-		error("inside responses")
 	else
 		if request~="" and request~=nil then
 			print("Invalid request happened:",request)
@@ -807,7 +819,7 @@ function poke_clients()
 				if r==nil and alt then
 					k:send(alt)
 				else
-					k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
+					k:send(make_content(r))
 				end
 				k:close()
 				removed_entries[k]=true
