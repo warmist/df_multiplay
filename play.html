@@ -20,6 +20,20 @@ var color_map=[[0,0,0],[0,0,128],[0,128,0],[0,128,128],
 	[128,0,0],[128,0,128],[128,128,0],[192,192,192],
 	[128,128,128],[0,0,255],[0,255,0],[0,255,255],
 	[255,0,0],[255,0,255],[255,255,0],[255,255,255]];
+var movement={
+	Numpad8:[0,-1],
+	Numpad7:[-1,-1],
+	Numpad4:[-1,0],
+	Numpad1:[-1,1],
+	Numpad2:[0,1],
+	Numpad3:[1,1],
+	Numpad6:[1,0],
+	Numpad9:[1,-1]
+}
+
+document.onkeypress=function (key) {
+	//TODO: keyrepeat is too fast. Need to track keydown/keyup and send AJAX on timer
+}
 function color(id){
 	var c=color_map[id]
 		return "rgb("+c[0]+","+c[1]+","+c[2]+")";
@@ -66,10 +80,13 @@ function draw_map(){
 function update_map() {
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4 && this.status == 200) {
-		var json_map= JSON.parse(this.responseText);
-		map=json_map
-		draw_map()
+	if (this.readyState == 4) {
+		if(this.status==200)
+		{
+			var json_map= JSON.parse(this.responseText);
+			map=json_map.map
+			draw_map()
+		}
 		setTimeout(update_map, 100);
 	}
 	};
@@ -144,12 +161,18 @@ function get_combat_log(){
 
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4 && this.status == 200) {
-		var json_report= JSON.parse(this.responseText);
-		combat_log.last_seen=json_report.current_count
-		var print_lines=10
-		combat_log.text=add_max(combat_log.text,json_report.log,print_lines)
-		update_log()
+	if (this.readyState == 4) {
+		if(this.status == 200)
+		{
+			var json_report= JSON.parse(this.responseText);
+			combat_log.last_seen=json_report.current_count
+			var print_lines=10
+			if(json_report.log.length>0)
+			{
+				combat_log.text=add_max(combat_log.text,json_report.log,print_lines)
+				update_log()
+			}
+		}
 		setTimeout(get_combat_log, 200);
 	}
 	};

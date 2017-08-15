@@ -19,6 +19,7 @@
 local sock=require 'plugins.luasocket'
 local map=require 'plugins.screenshot-map'
 local utils=require 'utils'
+local debug=require 'debug'
 local args={...}
 
 
@@ -195,7 +196,7 @@ function fill_page_data( page_text,variables )
 end
 load_page_data()
 load_buyables()
-users=users or {}
+users=users or {{name="Test",password="test"}}
 unit_used=unit_used or {}
 port=port or sock.tcp:bind(HOST,6666)
 port:setNonblocking()
@@ -375,13 +376,14 @@ function get_user(cmd, cookies)
 end
 function get_unit( user )
 	if user.unit_id==nil then
-		local u,u_id=pick_unused_target()
+		--[[local u,u_id=pick_unused_target()
 		if u_id ==nil then
 			return false,page_data.intro.."Sorry, couldn't find a valid unit for you :("..page_data.outro
 		end
 		user.unit_id=u_id
 		unit_used[u_id]=true
-		return u,u_id
+		return u,u_id]]
+		return
 	end
 
 	local t=df.unit.find(user.unit_id)
@@ -414,9 +416,9 @@ end
 function respond_json_map(cmd,cookies)
 
 	local user,err=get_user(cmd,cookies)
-	if not user then return "[]" end --TODO somehow report error?
+	if not user then return "{}" end --TODO somehow report error?
 	local t,err2=get_unit(user)
-	if not t then return "[]" end --TODO somehow report error?
+	if not t then return "{}" end --TODO somehow report error?
 	--valid users unpause game for some time
 
 	local delta_z=0
@@ -444,7 +446,7 @@ function respond_json_map(cmd,cookies)
 		end
 	end
 
-	return "["..map_string.."]"
+	return '{"map":['..map_string..']}'
 end
 function respond_delete( cmd, cookies )
 	local user,err=get_user(cmd,cookies)
@@ -562,7 +564,7 @@ function respond_actual_new_unit(cmd,cookies)
 	end
 	unit_used[u_id]=true
 	user.unit_id=u_id
-
+	df.global.ui.follow_unit=u_id
 	--return page_data.intro.."New unit spawned <a href='play'>Go back</a>"..page_data.outro
 	--return respond_play(cmd,cookies) --TODO figure out redirect?
 	return nil, make_redirect("play")
@@ -658,11 +660,13 @@ function respond_json_combat_log(cmd,cookies)
 
 	local ret=string.format('{"current_count":%d,"log":[',#log)
 	local comma=''
-	for i=last_seen,#log-1 do
-		local text=df.report.find(log[i]).text
-		text=text:gsub('"','')
-		ret=ret..string.format('%s"%s"\n',comma,text)
-		comma=','
+	if #log>0 then
+		for i=last_seen,#log-1 do
+			local text=df.report.find(log[i]).text
+			text=text:gsub('"','')
+			ret=ret..string.format('%s"%s"\n',comma,text)
+			comma=','
+		end
 	end
 	return ret.."]}"
 end
@@ -682,6 +686,26 @@ function respond_json_items( cmd,cookies )
 
 	for i,v in ipairs(item_data) do
 		ret=ret..string.format('%s\n{"name":"%s","cost":%g}',comma,v.name,v.cost)
+		comma=','
+	end
+	return ret.."]"
+end
+function respond_json_kills( cmd,cookies )
+	local ret="["
+	local comma=''
+
+	for i,v in ipairs(df.global.world.units.active) do
+		local hf_id=v.hist_figure_id
+		local kills=0
+		if hf_id~=-1 then
+			local hf=df.historical_figure.find(hf_id)
+			if hf.info and hf.info.kills then
+				for i,v in ipairs(hf.info.kills.killed_count) do
+					kills=kills+v
+				end
+			end
+		end
+		ret=ret..string.format('%s\n{"name":"%s","kills":%d}',comma,v.name.first_name,kills)
 		comma=','
 	end
 	return ret.."]"
@@ -716,29 +740,17 @@ function responses(request,cmd,cookies)
 		return respond_json_materials(cmd,cookies)
 	elseif request=='get_items' then
 		return respond_json_items(cmd,cookies)
+	elseif request=='get_kills' then
+		return respond_json_kills(cmd,cookies)
+	elseif request=='fake_error' and DEBUG then
+		error("inside responses")
 	else
-		if request~="" then
+		if request~="" and request~=nil then
 			print("Invalid request happened:",request)
 			printd("cmd:",cmd)
 		end
 		return respond_err()
 	end
-
-	--[[
-	if users[request] then
-		local r=perform_commands(users[request],cmd)
-		if r then
-			return r
-		end
-		return respond_map(users[request])
-	elseif request~=nil and request~='' then
-		return respond_new_user(request)
-	else
-		printd("Request:",request)
-		printd("cmd:",cmd)
-		return respond_err()
-	end
-	]]
 end
 function parse_cookies( text )
 	local ret={}
@@ -834,18 +846,29 @@ function poke_clients()
 	local removed_entries={}
 	for k,v in pairs(clients) do
 
-		local ok,req,cmd,cookies=parse_request(k)
-		if ok then
-			local r,alt=responses(req,cmd,cookies)
-			if r==nil and alt then
-				k:send(alt)
+		function do_work()
+			local ok,req,cmd,cookies=parse_request(k)
+			if ok then
+				local r,alt=responses(req,cmd,cookies)
+				if r==nil and alt then
+					k:send(alt)
+				else
+					k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
+				end
+				k:close()
+				removed_entries[k]=true
 			else
-				k:send(string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r))
+				k:close()
+				removed_entries[k]=true
 			end
-			k:close()
-			removed_entries[k]=true
-		else
-			k:close()
+		end
+		local err_ok,err_msg=xpcall(do_work,debug.traceback)
+		if not err_ok then
+			print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
+			print("Internal error:",err_msg)
+			pcall(k.send,k,"HTTP/1.0 500 Internal Error\r\nConnection: Close\r\n\r\n")
+			pcall(k.close,k)
+			print("+++++++++++++++++++++++++++++++++++++++++++++++++++++++++")
 			removed_entries[k]=true
 		end
 	end
