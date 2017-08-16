@@ -1,6 +1,7 @@
 <script>
-
-
+var economy_used=!!use_money!!
+var my_money=0
+var current_cost=0
 var materials_select=document.getElementById("material")
 function selectAll() 
     { 
@@ -26,7 +27,7 @@ function fill_items(argument) {
 	xhttp.open("GET", "get_items", true);
 	xhttp.send();
 }
-function fill_materials(argument) {
+function fill_materials() {
 	var materials_select=document.getElementById("material")
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
@@ -38,6 +39,20 @@ function fill_materials(argument) {
 	}
 	};
 	xhttp.open("GET", "get_materials", true);
+	xhttp.send();
+}
+function get_money(){
+	var money_div=document.getElementById("money")
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var user_info= JSON.parse(this.responseText);
+		my_money=user_info.money
+		money_div.innerHTML=user_info.money
+	}
+
+	};
+	xhttp.open("GET", "get_user_info", true);
 	xhttp.send();
 }
 function add_item() {
@@ -85,7 +100,21 @@ function recalcCost() {
 		var s=item_select.options[i].value.split(',')
 		cost+=Number(s[2])
 	}
-	cost_calc.innerHTML =Math.floor(cost)
+	current_cost=Math.floor(cost)
+	if(economy_used)
+		cost_calc.innerHTML =current_cost
+	else
+		cost_calc.innerHTML =0
+}
+function check_money(){
+	if (!economy_used)
+		return true;
+
+	if(my_money>=current_cost)
+		return true
+
+	alert("Not enough money!")
+	return false;
 }
 </script>
 <form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onsubmit="selectAll();">
@@ -100,8 +129,11 @@ Material:<select id="material"></select> Item:<select id="items"></select><br>
 </select>
 <br>
 <button onclick="remove_item()" type="button">Remove item</button><br>
-Cost:<div id="cost_calc"></div><br>
-<button type='submit' form='form1' value='submit' name='button1'>Ask for new unit</button>
+<div id="economy">
+Money:<div id="money">0</div>
+Cost:<div id="cost_calc">0</div><br>
+</div>
+<button type='submit' form='form1' value='submit' name='button1' onclick="return check_money()">Ask for new unit</button>
 </form>
 
 
@@ -109,4 +141,5 @@ Cost:<div id="cost_calc"></div><br>
 	get_races()
 	fill_materials()
 	fill_items()
+	get_money()
 </script>

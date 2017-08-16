@@ -20,6 +20,7 @@ local sock=require 'plugins.luasocket'
 local map=require 'plugins.screenshot-map'
 local utils=require 'utils'
 local debug=require 'debug'
+local eventful=require 'plugins.eventful'
 local args={...}
 
 
@@ -27,8 +28,9 @@ local HOST="http://dwarffort.duckdns.org/"
 local DEBUG=false
 local ADVENTURE=false
 local FORTMODE=false
-local FPS_LIMIT=50
-
+local FPS_LIMIT=50 --limit fps to this so it would not look too fast
+local KILL_MONEY=5 --how much money you get from kills
+local USE_MONEY=true
 
 if DEBUG then
 	printd=function ( ... )
@@ -212,8 +214,11 @@ function fill_page_data( page_text,variables )
 end
 load_page_data()
 load_buyables()
+
 users=users or {Test={name="Test",password="test"}}
 unit_used=unit_used or {}
+
+
 port=port or sock.tcp:bind(HOST,6666)
 port:setNonblocking()
 
@@ -435,7 +440,7 @@ function respond_delete( cmd, cookies )
 	end
 end
 function respond_new_unit(cmd,cookies)
-	return page_data.intro..page_data.unit_select..page_data.outro
+	return page_data.intro..fill_page_data(page_data.unit_select,{use_money=USE_MONEY})..page_data.outro
 end
 function get_valid_unit_pos(  )
 	local x,y,z
@@ -507,8 +512,9 @@ function respond_actual_new_unit(cmd,cookies)
 	if race==nil or tonumber(race)==nil or unit_data[tonumber(race)]==nil then
 		return page_data.intro.."Error: invalid race selected"..page_data.outro
 	end
+	local sum_cost=0
 	local actual_race=unit_data[tonumber(race)]
-
+	sum_cost=sum_cost+actual_race.cost
 	local x,y,z=get_valid_unit_pos()
 	if not x then
 		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
@@ -533,12 +539,22 @@ function respond_actual_new_unit(cmd,cookies)
 			else
 				local item_t=item_data[item]
 				local mat_t=mat_data[mat]
+				sum_cost=sum_cost+mat_t.cost*item_t.cost
 				local count=1
 				if item_t.type==df.item_type.AMMO then --hack for now...
 					count=20
 				end
 				add_item({type=item_t.type,subtype=item_t.subtype,mat_type=mat_t.type,mat_index=mat_t.index,count=count})
 			end
+		end
+	end
+	sum_cost=math.floor(sum_cost)
+	if USE_MONEY then
+		user.money=user.money or 0
+		if sum_cost>user.money then
+			return page_data.intro.."Error: not enough money"..page_data.outro
+		else
+			user.money=user.money-sum_cost
 		end
 	end
 	--str = str:gsub('%W','')
@@ -559,7 +575,7 @@ function respond_actual_new_unit(cmd,cookies)
 		local unit=df.unit.find(u_id)
 		unit.name.first_name=cmd.unit_name
 	end
-	unit_used[u_id]=true
+	unit_used[u_id]=user
 	user.unit_id=u_id
 	df.global.ui.follow_unit=u_id
 
@@ -695,6 +711,13 @@ function respond_json_items( cmd,cookies )
 	end
 	return ret.."]"
 end
+function respond_json_user_info( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end
+	local info={}
+	info.money=user.money or 0
+	return json_pack_obj(info)
+end
 function respond_json_kills( cmd,cookies )
 	local ret="["
 	local comma=''
@@ -735,6 +758,7 @@ function responses(request,cmd,cookies)
 	get_items=respond_json_items,
 	get_kills=respond_json_kills,
 	get_unit_info=respond_json_unit_info,
+	get_user_info=respond_json_user_info,
 	}
 
 	local tj=table_json[request]
@@ -939,4 +963,30 @@ end
 if FPS_LIMIT then
 	df.global.enabler.fps=FPS_LIMIT
 end
+
+function unit_death_callback( u_id )
+	print("Unit death:",u_id)
+	local u=df.unit.find(u_id)
+	if not u then print("WARN: unit not found!"); return end
+
+	local inc_id=u.counters.death_id
+	if inc_id==-1 then print("WARN: not dead unit called callback!") return end
+	local killer=df.incident.find(inc_id).killer
+
+	if unit_used[killer] then
+		local user=unit_used[killer]
+		local money=user.money
+		if money then
+			user.money=money+KILL_MONEY
+		else
+			user.money=KILL_MONEY
+		end
+		print("User:",user.name, " killed!")
+		--TODO: send message to player
+	else
+		--print("Killer is not used:",killer)
+	end
+end
+eventful.onUnitDeath.multiplay=unit_death_callback
+eventful.enableEvent(eventful.eventType.UNIT_DEATH,100)
 event_loop()
