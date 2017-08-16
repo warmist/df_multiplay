@@ -32,6 +32,7 @@ local FPS_LIMIT=50 --limit fps to this so it would not look too fast
 local KILL_MONEY=5 --how much money you get from kills
 local USE_MONEY=true
 local SPECTATE_UNPAUSES=false
+local SPAWN_MOBS=15
 
 if DEBUG then
 	printd=function ( ... )
@@ -129,20 +130,26 @@ function parse_mat_token( text )
 
 	return mat,cost
 end
+function find_burrow(name)
+	local b=df.global.ui.burrows.list
+	for i,v in ipairs(b) do
+		if v.name==name then
+			return v
+		end
+	end
+	print("WARN:"..name.." burrow not found")
+end
+
 local spawn_burrow
 if FORTMODE then
-	function find_spawn( )
-		local b=df.global.ui.burrows.list
-		for i,v in ipairs(b) do
-			if v.name=="SPAWN" then
-				spawn_burrow=v
-				return
-			end
-		end
-		print("WARN: SPAWN burrow not found")
-	end
-	find_spawn()
+	spawn_burrow=find_burrow("SPAWN")
 end
+local npc_spawn
+if SPAWN_MOBS then
+	npc_spawn=find_burrow("SPAWN_MOBS")
+	print("npc_spawn:",npc_spawn)
+end
+
 function load_buyables()
 	--flip the units raws
 	local raw=df.global.world.raws.creatures.all
@@ -479,23 +486,27 @@ end
 function respond_new_unit(cmd,cookies)
 	return page_data.intro..fill_page_data(page_data.unit_select,{use_money=USE_MONEY})..page_data.outro
 end
-function get_valid_unit_pos(  )
+function get_valid_unit_pos( burrow )
 	local x,y,z
-	if FORTMODE then
+	if burrow then
 		for i=1,100 do
-			--TODO: CHECK IF TILE IN BURROW
-			local bx=spawn_burrow.block_x[math.random(0,#spawn_burrow.block_x-1)]-df.global.world.map.region_x*3
-			local by=spawn_burrow.block_y[math.random(0,#spawn_burrow.block_y-1)]-df.global.world.map.region_y*3
-			local bz=spawn_burrow.block_z[math.random(0,#spawn_burrow.block_z-1)]-df.global.world.map.region_z
-			x=math.random(bx*16,bx*16+15)
-			y=math.random(by*16,by*16+15)
-			z=bz
-			if dfhack.maps.isValidTilePos(x,y,z) then
-				local attrs = df.tiletype.attrs
-				local tt=dfhack.maps.getTileType(x,y,z)
-				local td,to=dfhack.maps.getTileFlags(x,y,z)
-				if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
-					return x,y,z
+
+			local blocks=dfhack.burrows.listBlocks(burrow)
+			local m_block=blocks[math.random(0,#blocks-1)]
+
+			local lx=math.random(0,15)
+			local ly=math.random(0,15)
+			if dfhack.burrows.isAssignedBlockTile(burrow,m_block,lx,ly) then
+				x=lx+m_block.map_pos.x
+				y=ly+m_block.map_pos.y
+				z=m_block.map_pos.z
+				if dfhack.maps.isValidTilePos(x,y,z) then
+					local attrs = df.tiletype.attrs
+					local tt=dfhack.maps.getTileType(x,y,z)
+					local td,to=dfhack.maps.getTileFlags(x,y,z)
+					if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+						return x,y,z
+					end
 				end
 			end
 		end
@@ -552,7 +563,14 @@ function respond_actual_new_unit(cmd,cookies)
 	local sum_cost=0
 	local actual_race=unit_data[tonumber(race)]
 	sum_cost=sum_cost+actual_race.cost
-	local x,y,z=get_valid_unit_pos()
+	local x,y,z
+
+	if FORTMODE then
+		x,y,z=get_valid_unit_pos(spawn_burrow)
+	else
+	 	x,y,z=get_valid_unit_pos()
+	end
+
 	if not x then
 		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
 	end
@@ -595,6 +613,7 @@ function respond_actual_new_unit(cmd,cookies)
 		end
 	end
 	--str = str:gsub('%W','')
+	df.global.world.arena_spawn.side=0
 	local create_unit=dfhack.script_environment('modtools/create-unit')
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
 	local u_id
@@ -989,6 +1008,28 @@ function center_adventurer()
 		units[0].pos.z=0
 	end
 end
+function spawn_mob()
+	if npc_spawn then
+		local x,y,z=get_valid_unit_pos(npc_spawn)
+		if x then
+			df.global.world.arena_spawn.side=66
+			clear_items()
+			local create_unit=dfhack.script_environment('modtools/create-unit')
+			print("Spawning mob:",x,y,z)
+			local u_id=create_unit.createUnit(576,math.random(0,1),{x,y,z}) --TODO more customization?
+			local u=df.unit.find(u_id)
+		end
+	end
+end
+function count_mobs()
+	local count=0
+	for i,v in ipairs(df.global.world.units.active) do
+		if not v.flags1.dead and v.enemy.enemy_status_slot==66 then
+			count=count+1
+		end
+	end
+	return count
+end
 function event_loop()
 	accept_connections()
 	if pause_countdown>0 then
@@ -1000,6 +1041,13 @@ function event_loop()
 	poke_clients()
 	if ADVENTURE then
 		center_adventurer()
+	end
+	if SPAWN_MOBS then
+		local m_count=count_mobs()
+		--print("Count:",m_count,SPAWN_MOBS)
+		if m_count<SPAWN_MOBS then
+			spawn_mob()
+		end
 	end
 	timeout_looper=dfhack.timeout(10,'frames',event_loop)
 end
@@ -1018,13 +1066,15 @@ function unit_death_callback( u_id )
 
 	if unit_used[killer] then
 		local user=unit_used[killer]
-		local money=user.money
-		if money then
-			user.money=money+KILL_MONEY
-		else
-			user.money=KILL_MONEY
+		if type(user)=='table' then --TODO: remove this @CLEANUP
+			local money=user.money
+			if money then
+				user.money=money+KILL_MONEY
+			else
+				user.money=KILL_MONEY
+			end
+			printd("User:",user.name, " killed!")
 		end
-		print("User:",user.name, " killed!")
 		--TODO: send message to player
 	else
 		--print("Killer is not used:",killer)
