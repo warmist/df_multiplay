@@ -31,6 +31,7 @@ local FORTMODE=false
 local FPS_LIMIT=50 --limit fps to this so it would not look too fast
 local KILL_MONEY=5 --how much money you get from kills
 local USE_MONEY=true
+local SPECTATE_UNPAUSES=false
 
 if DEBUG then
 	printd=function ( ... )
@@ -59,6 +60,7 @@ if args[1]=="-s" then
 end
 
 local page_data={}
+local assets_data={}
 function load_page_data()
 	local files={
 		'intro',
@@ -76,10 +78,13 @@ function load_page_data()
 		page_data[v]=f:read('all')
 		f:close()
 	end
-
-	do
-		local f=io.open('hack/scripts/http/favicon.png','rb')
-		page_data.favicon=f:read('all')
+	local assets={
+		['favicon.ico']='favicon.png',
+		['map.js']='map.js',
+	}
+	for k,v in pairs(assets) do
+		local f=io.open('hack/scripts/http/'..v,'rb')
+		assets_data[k]=f:read('all')
 		f:close()
 	end
 end
@@ -323,10 +328,6 @@ function respond_play( cmd,cookies )
 	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
 end
 function respond_spectate(cmd,cookies)
-
-	local user,err=get_user(cmd,cookies)
-	if not user then return err end
-
 	local m=df.global.world.map
 	local w=21
 	local valid_variables={
@@ -419,6 +420,11 @@ function respond_json_map_spectate(cmd,cookies)
 	local x=tonumber(cmd.x)
 	local y=tonumber(cmd.y)
 	local z=tonumber(cmd.z)
+
+	if SPECTATE_UNPAUSES then
+		server_unpause()
+	end
+
 	return json_map(x,y,z,w,w)
 end
 function respond_json_unit_info(cmd,cookies)
@@ -770,8 +776,12 @@ function respond_json_kills( cmd,cookies )
 end
 function responses(request,cmd,cookies)
 	--------------------MISC RESPONSES
+	local asset=assets_data[request]
+	if asset then
+		return asset
+	end
+
 	local table_misc={
-		["favicon.ico"]=function() return page_data.favicon end,
 		fake_error=function () error("inside responses") end
 	}
 

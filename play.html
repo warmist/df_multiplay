@@ -7,19 +7,13 @@
 </div>
 <br>
 <img id="tilesheet" src="http://i.imgur.com/fUGSAWC.png" alt="tilesheet" style="display: none;">
+<script src="map.js"></script>
 <script>
+
+setup_map("canvas","tilesheet",16,16,!!size!!)
 var c = document.getElementById("canvas");
-var ctx = c.getContext("2d");
-var spr=document.getElementById("tilesheet");
-var tile_x=16;
-var tile_y=16;
-var canvas_tile_count=!!size!!;
-var map=[];
 var view_dz=0;
-var color_map=[[0,0,0],[0,0,128],[0,128,0],[0,128,128],
-	[128,0,0],[128,0,128],[128,128,0],[192,192,192],
-	[128,128,128],[0,0,255],[0,255,0],[0,255,255],
-	[255,0,0],[255,0,255],[255,255,0],[255,255,255]];
+
 var movement={
 	Numpad8:[0,-1],
 	Numpad7:[-1,-1],
@@ -39,49 +33,6 @@ document.onkeydown=function (key) {
 }
 document.onkeyup=function (key) {
 	cur_movement=null
-}
-function color(id){
-	var c=color_map[id]
-		return "rgb("+c[0]+","+c[1]+","+c[2]+")";
-}
-function draw_bg( x,y,bg ){
-	ctx.fillStyle=color(bg);
-	ctx.fillRect(x*tile_x,y*tile_y,tile_x,tile_y);
-}
-function draw_tile( x,y,tile){
-	var sx=tile%16;
-	var sy=Math.floor(tile/16);
-	ctx.drawImage(spr,sx*tile_x,sy*tile_y,tile_x,tile_y,x*tile_x,y*tile_y,tile_x,tile_y);
-}
-function color_tiles( x,y,fg,bright ){
-	ctx.fillStyle=color(fg+bright*8);
-	ctx.fillRect(x*tile_x,y*tile_y,tile_x,tile_y);
-}
-function draw_map(){
-	ctx.clearRect(0, 0, c.width, c.height);
-	ctx.globalCompositeOperation="source-over";
-	for(var x=0;x<canvas_tile_count;x++)
-	for(var y=0;y<canvas_tile_count;y++)
-	{
-		var t=map[x+y*canvas_tile_count]
-		draw_tile(x,y,t[0]);
-	}
-	
-	ctx.globalCompositeOperation="source-atop";
-	for(var x=0;x<canvas_tile_count;x++)
-	for(var y=0;y<canvas_tile_count;y++)
-	{
-		var t=map[x+y*canvas_tile_count]
-		color_tiles(x,y,t[1],t[3]);
-	}
-	
-	ctx.globalCompositeOperation="destination-over";
-	for(var x=0;x<canvas_tile_count;x++)
-	for(var y=0;y<canvas_tile_count;y++)
-	{
-		var t=map[x+y*canvas_tile_count]
-		draw_bg(x,y,t[2]);
-	}
 }
 function key_movement(){
 	if(!isNil(cur_movement))
@@ -103,8 +54,7 @@ function update_map() {
 		if(this.status==200)
 		{
 			var json_map= JSON.parse(this.responseText);
-			map=json_map
-			draw_map()
+			draw_map(json_map)
 		}
 		setTimeout(update_map, 100);
 	}
