@@ -68,7 +68,8 @@ function load_page_data()
 		'cookie',
 		'play',
 		'del_user',
-		'unit_select'
+		'unit_select',
+		'spectate'
 	}
 	for i,v in ipairs(files) do
 		local f=io.open('hack/scripts/http/'..v..'.html','rb')
@@ -321,6 +322,24 @@ function respond_play( cmd,cookies )
 
 	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
 end
+function respond_spectate(cmd,cookies)
+
+	local user,err=get_user(cmd,cookies)
+	if not user then return err end
+
+	local m=df.global.world.map
+	local w=21
+	local valid_variables={
+		size=w,
+		canvas_w=w*16,
+		canvas_h=w*16,
+		start_x=m.x_count//2,
+		start_y=m.y_count//2,
+		start_z=m.z_count//2,
+	}
+
+	return page_data.intro..fill_page_data(page_data.spectate,valid_variables)..page_data.outro
+end
 function server_unpause()
 	pause_countdown=10
 end
@@ -355,22 +374,8 @@ function json_pack_obj( t)
 	end
 	return string.format("{%s}",ret)
 end
-function respond_json_map(cmd,cookies)
-
-	local user,err=get_user(cmd,cookies)
-	if not user then return "{}" end --TODO somehow report error?
-	local t,err2=get_unit(user)
-	if not t then return "{}" end --TODO somehow report error?
-	--valid users unpause game for some time
-
-	local delta_z=0
-	if cmd.dz and tonumber(cmd.dz) then
-		delta_z=tonumber(cmd.dz)
-	end
-	server_unpause()
-
-	local w=21
-	local m=map.render_map_rect(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z+delta_z,w,w)
+function json_map(x,y,z,w,h)
+	local m=map.render_map_rect(x,y,z,w,h)
 	local line=0
 	local map_string=""
 	for i=0,#m,4 do
@@ -387,8 +392,34 @@ function respond_json_map(cmd,cookies)
 			map_string=map_string.."\n"
 		end
 	end
+	return '['..map_string..']'
+end
+function respond_json_map(cmd,cookies)
 
-	return '{"map":['..map_string..']}'
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{}" end --TODO somehow report error?
+	local t,err2=get_unit(user)
+	if not t then return "{}" end --TODO somehow report error?
+	--valid users unpause game for some time
+
+	local delta_z=0
+	if cmd.dz and tonumber(cmd.dz) then
+		delta_z=tonumber(cmd.dz)
+	end
+	server_unpause()
+
+	local w=21
+	return json_map(t.pos.x-w//2-1,t.pos.y-w//2-1,t.pos.z+delta_z,w,w)
+end
+function respond_json_map_spectate(cmd,cookies)
+	local w=21
+	if not cmd.x or not tonumber(cmd.x) then return "{error='invalid_x'}" end
+	if not cmd.y or not tonumber(cmd.y) then return "{error='invalid_y'}" end
+	if not cmd.z or not tonumber(cmd.z) then return "{error='invalid_z'}" end
+	local x=tonumber(cmd.x)
+	local y=tonumber(cmd.y)
+	local z=tonumber(cmd.z)
+	return json_map(x,y,z,w,w)
 end
 function respond_json_unit_info(cmd,cookies)
 	local user,err=get_user(cmd,cookies)
@@ -751,6 +782,7 @@ function responses(request,cmd,cookies)
 	--------------------JSON RESPONSES
 	local table_json={
 	map=respond_json_map,
+	map_spectate=respond_json_map_spectate,
 	move_unit=respond_json_move,
 	get_unit_list=respond_json_unit_list,
 	get_report_log=respond_json_combat_log,
@@ -770,6 +802,7 @@ function responses(request,cmd,cookies)
 	login=respond_login,
 	dologin=respond_cookie,
 	play=respond_play,
+	spectate=respond_spectate,
 	delete=respond_delete,
 	new_unit=respond_new_unit,
 	submit_new_unit=respond_actual_new_unit,
