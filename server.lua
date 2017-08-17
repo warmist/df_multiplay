@@ -699,6 +699,27 @@ function respond_json_move( cmd,cookies )
 	unit.path.path.z:resize(0)
 	return "{}"
 end
+function respon_json_items( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error"="invalid_login"}' end
+	local unit,err2=get_unit(user)
+	if not unit then return  '{"error"="invalid_unit"}' end
+
+	if unit.flags1.dead then return '{"error"="dead"}' end
+
+	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
+	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
+	local dz=0
+	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
+
+	local dx=tonumber(cmd.dx)
+	local dy=tonumber(cmd.dy)
+	local tx=unit.pos.x+dx
+	local ty=unit.pos.y+dy
+	local ty=unit.pos.z+dz
+
+	return "{}"
+end
 function respond_json_unit_list(cmd, cookies)
 	--{race=race_r,caste=caste_id,caste_raw=caste_raw,cost=tonumber(cost)}
 	local ret="["
@@ -797,22 +818,40 @@ function respond_json_kills( cmd,cookies )
 end
 function sanitize(txt)
     local replacements = {
-        ['&' ] = '&amp;', 
-        ['<' ] = '&lt;', 
-        ['>' ] = '&gt;', 
+        ['&' ] = '&amp;',
+        ['<' ] = '&lt;',
+        ['>' ] = '&gt;',
         ['\n'] = '<br/>'
     }
     return txt
         :gsub('[&<>\n]', replacements)
         :gsub(' +', function(s) return ' '..('&nbsp;'):rep(#s-1) end)
 end
+
+function encodeURI(str)
+	if (str) then
+		str = string.gsub (str, "\n", "\r\n")
+		str = string.gsub (str, "([^%w ])",
+			function (c) return string.format ("%%%02X", string.byte(c)) end)
+		str = string.gsub (str, " ", "+")
+   end
+   return str
+end
+
+function decodeURI(s)
+	if(s) then
+		s = string.gsub(s, '%%(%x%x)', 
+			function (hex) return string.char(tonumber(hex,16)) end )
+	end
+	return s
+end
 function respond_json_message( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
 	if not user then return "{error='invalid_login'}" end
 
-	local msg=sanitize(cmd.msg)
+	local msg=decodeURI(cmd.msg)
 	msg=msg:sub(1,63)
-	msg=user.name..":"..msg
+	msg=user.name..":"..sanitize(msg)
 	table.insert(message_log,msg)
 	print("CHAT>"..msg)
 	return "{}"
@@ -873,17 +912,22 @@ function responses(request,cmd,cookies)
 	local table_json={
 	map=respond_json_map,
 	map_spectate=respond_json_map_spectate,
+	look_items=respond_json_look_items,
+	--actions
 	move_unit=respond_json_move,
+	--economy
 	get_unit_list=respond_json_unit_list,
-	get_report_log=respond_json_combat_log,
 	get_materials=respond_json_materials,
 	get_items=respond_json_items,
 	get_kills=respond_json_kills,
+	--info
 	get_unit_info=respond_json_unit_info,
 	get_user_info=respond_json_user_info,
 	--messages
 	get_message_log=respond_json_message_log,
 	send_message=respond_json_message,
+
+	get_report_log=respond_json_combat_log,
 	}
 
 	local tj=table_json[request]
