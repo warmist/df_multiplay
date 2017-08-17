@@ -82,6 +82,7 @@ function load_page_data()
 	local assets={
 		['favicon.ico']='favicon.png',
 		['map.js']='map.js',
+		['chat.css']='chat.css',
 	}
 	for k,v in pairs(assets) do
 		local f=io.open('hack/scripts/http/'..v,'rb')
@@ -147,7 +148,7 @@ end
 local npc_spawn
 if SPAWN_MOBS then
 	npc_spawn=find_burrow("SPAWN_MOBS")
-	print("npc_spawn:",npc_spawn)
+	--print("npc_spawn:",npc_spawn)
 end
 
 function load_buyables()
@@ -230,13 +231,14 @@ load_buyables()
 
 users=users or {Test={name="Test",password="test"}}
 unit_used=unit_used or {}
-
+message_log=message_log or {}
 
 port=port or sock.tcp:bind(HOST,6666)
 port:setNonblocking()
 
 local clients={}
 local pause_countdown=0
+
 function make_redirect(loc)
 	return "HTTP/1.1 302 Found\nLocation: "..HOST..loc.."\n\n"
 end
@@ -793,6 +795,65 @@ function respond_json_kills( cmd,cookies )
 	end
 	return ret.."]"
 end
+function sanitize(txt)
+    local replacements = {
+        ['&' ] = '&amp;', 
+        ['<' ] = '&lt;', 
+        ['>' ] = '&gt;', 
+        ['\n'] = '<br/>'
+    }
+    return txt
+        :gsub('[&<>\n]', replacements)
+        :gsub(' +', function(s) return ' '..('&nbsp;'):rep(#s-1) end)
+end
+function respond_json_message( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end
+	print(cmd.msg)
+	local msg=sanitize(cmd.msg)
+	msg=msg:sub(1,63)
+	msg=user.name..":"..msg
+	table.insert(message_log,msg)
+	print("CHAT>"..msg)
+	return "{}"
+end
+function respond_json_message_log( cmd,cookies )
+	local C_DEFAULT_LOGSIZE=20
+	local C_MAX_LOGSIZE=100
+
+	local user,err=get_user(cmd,cookies)
+	if not user then return "{error='invalid_login'}" end
+
+	local last_seen
+	local log = message_log
+
+	if cmd.last_seen==nil or tonumber(cmd.last_seen)==nil then
+		last_seen=#log-C_DEFAULT_LOGSIZE
+	else
+		last_seen=tonumber(cmd.last_seen)
+	end
+
+	if last_seen<1 then last_seen=1 end
+	if last_seen>#log or  #log-last_seen>C_MAX_LOGSIZE then
+		last_seen=#log-C_DEFAULT_LOGSIZE
+	end
+	--print("Final last_seen:",last_seen)
+	last_seen=last_seen+1
+	local ret=string.format('{"current_count":%d,"log":[',#log)
+	local comma=''
+	if #log>0 then
+		for i=last_seen,#log do
+			local text=log[i]
+			if text then
+				text=text:gsub('"','')
+				ret=ret..string.format('%s"%s"\n',comma,text)
+				comma=','
+			end
+		end
+	end
+	return ret.."]}"
+end
+
 function responses(request,cmd,cookies)
 	--------------------MISC RESPONSES
 	local asset=assets_data[request]
@@ -820,6 +881,9 @@ function responses(request,cmd,cookies)
 	get_kills=respond_json_kills,
 	get_unit_info=respond_json_unit_info,
 	get_user_info=respond_json_user_info,
+	--messages
+	get_message_log=respond_json_message_log,
+	send_message=respond_json_message,
 	}
 
 	local tj=table_json[request]
@@ -863,7 +927,7 @@ function parse_content( other )
 	if other~=nil then
 		local command={}
 		other=other:gsub("%%20"," ")--drop '?' and fix spaces
-		for i in string.gmatch(other, "[^ &]+") do
+		for i in string.gmatch(other, "[^&]+") do
 
    			local eq=string.find(i,"=")
 
@@ -1015,7 +1079,7 @@ function spawn_mob()
 			df.global.world.arena_spawn.side=66
 			clear_items()
 			local create_unit=dfhack.script_environment('modtools/create-unit')
-			print("Spawning mob:",x,y,z)
+			printd("Spawning mob:",x,y,z)
 			local u_id=create_unit.createUnit(576,math.random(0,1),{x,y,z}) --TODO more customization?
 			local u=df.unit.find(u_id)
 		end
@@ -1056,7 +1120,7 @@ if FPS_LIMIT then
 end
 
 function unit_death_callback( u_id )
-	print("Unit death:",u_id)
+	--print("Unit death:",u_id)
 	local u=df.unit.find(u_id)
 	if not u then print("WARN: unit not found!"); return end
 

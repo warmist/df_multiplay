@@ -1,0 +1,6 @@
+.wrapper {
+  display: flex;
+}
+.messages {
+  height: 100%;
+}
