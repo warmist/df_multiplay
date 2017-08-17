@@ -809,7 +809,7 @@ end
 function respond_json_message( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
 	if not user then return "{error='invalid_login'}" end
-	print(cmd.msg)
+
 	local msg=sanitize(cmd.msg)
 	msg=msg:sub(1,63)
 	msg=user.name..":"..msg
