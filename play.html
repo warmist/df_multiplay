@@ -1,4 +1,9 @@
 <div class="wrapper">
+<div id='item_list' style="z-index: 1; position: absolute; top: 0px; left: 0px; background: #000;display: none;"> Items:<br>
+<select id="item_select"></select>
+<button id='btn_haul' type="button" onclick="haul_cur_item()">Haul</button>
+<button id='btn_equip' type="button" onclick="equip_cur_item()">Equip</button>
+</div>
 <canvas id="canvas" width="!!canvas_w!!" height="!!canvas_h!!"></canvas>
 
 <div class="chat_window">
@@ -17,6 +22,10 @@
   <button type="button" onclick="view_dz+=1">Look up</button>
   <button type="button" onclick="view_dz=0">Reset</button>
   <button type="button" onclick="view_dz-=1">Look down</button>
+  <br>
+  <button type="button" onclick="haul_item()">Haul Item</button>
+  <button type="button" onclick="drop_hauled_item()">Drop Haul</button>
+  <button type="button" onclick="equip_item()">Equip item</button>
 </div>
 <br>
 
@@ -119,6 +128,100 @@ update_map();
 function add_max(a,e,m)
 {
 	return a.concat(e).slice(-m)
+}
+/*
+	item stuff
+*/
+function drop_hauled_item()
+{
+	var xhttp = new XMLHttpRequest();
+	xhttp.open("GET", "drop_hauled_item", true);
+	xhttp.send();
+}
+function equip_cur_item(id)
+{
+	var cur_id
+	if(!isNil(id))
+		cur_id=id
+	else
+	{
+		var its=document.getElementById('item_select')
+		var cur_id=Number(its.value)
+	}
+	var xhttp = new XMLHttpRequest();
+	xhttp.open("GET", "equip_item?id="+cur_id, true);
+	xhttp.send();
+	hide_item_list()
+}
+function haul_cur_item(id)
+{
+	var cur_id
+	if(!isNil(id))
+		cur_id=id
+	else
+	{
+		var its=document.getElementById('item_select')
+		var cur_id=Number(its.value)
+	}
+	var xhttp = new XMLHttpRequest();
+	xhttp.open("GET", "haul_item?id="+cur_id, true);
+	xhttp.send();
+	hide_item_list()
+}
+function hide_item_list()
+{
+	var itl=document.getElementById('item_list')
+	itl.style.display='none'
+}
+function show_item_list(items)
+{
+	var itl=document.getElementById('item_list')
+	itl.style.display='initial'
+	var its=document.getElementById('item_select')
+	for (a in its.options) { its.options.remove(0); }
+	items.forEach(function (e,i) {
+			its.options.add( new Option(e.name,[e.id], false) );
+	})
+}
+function haul_item()
+{
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 ) {
+		if(this.status == 200)
+		{
+			document.getElementById('btn_equip').style.display='none'
+			document.getElementById('btn_haul').style.display='initial'
+			var items=JSON.parse(this.responseText)
+			if (items.length>1)
+				show_item_list(items)
+			else if (items.length==1)
+				haul_cur_item(items[0].id)
+		}
+	}
+	};
+	xhttp.open("GET", "look_items", true);
+	xhttp.send();
+}
+function equip_item()
+{
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 ) {
+		if(this.status == 200)
+		{
+			document.getElementById('btn_equip').style.display='initial'
+			document.getElementById('btn_haul').style.display='none'
+			var items=JSON.parse(this.responseText)
+			if (items.length>1)
+				show_item_list(items)
+			else if (items.length==1)
+				equip_cur_item(items[0].id)
+		}
+	}
+	};
+	xhttp.open("GET", "look_items", true);
+	xhttp.send();
 }
 /*
 	chat stuff

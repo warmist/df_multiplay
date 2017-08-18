@@ -21,6 +21,7 @@ local map=require 'plugins.screenshot-map'
 local utils=require 'utils'
 local debug=require 'debug'
 local eventful=require 'plugins.eventful'
+local jobs=require 'hack.scripts.http.jobs'
 local args={...}
 
 
@@ -369,6 +370,7 @@ end
 function json_pack_arr( t,start )
 	local ret=""
 	local comma=""
+	start=start or 1
 	for i=start,#t-(1-start) do
 		ret=ret..string.format('%s%s\n',comma,json_str(t[i]))
 		comma=','
@@ -651,11 +653,11 @@ function dir_signs( dx,dy )
 end
 function respond_json_move( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
-	if not user then return '{"error"="invalid_login"}' end
+	if not user then return '{"error":"invalid_login"}' end
 	local unit,err2=get_unit(user)
-	if not unit then return  '{"error"="invalid_unit"}' end
+	if not unit then return  '{"error":"invalid_unit"}' end
 
-	if unit.flags1.dead then return '{"error"="dead"}' end
+	if unit.flags1.dead then return '{"error":"dead"}' end
 
 	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
 	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
@@ -701,11 +703,11 @@ function respond_json_move( cmd,cookies )
 end
 function respon_json_items( cmd,cookies )
 	local user,err=get_user(cmd,cookies)
-	if not user then return '{"error"="invalid_login"}' end
+	if not user then return '{"error":"invalid_login"}' end
 	local unit,err2=get_unit(user)
-	if not unit then return  '{"error"="invalid_unit"}' end
+	if not unit then return  '{"error":"invalid_unit"}' end
 
-	if unit.flags1.dead then return '{"error"="dead"}' end
+	if unit.flags1.dead then return '{"error":"dead"}' end
 
 	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
 	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
@@ -779,6 +781,108 @@ function respond_json_materials( cmd,cookies )
 		comma=','
 	end
 	return ret.."]"
+end
+
+function find_all_items(item_list,pos)
+	local vec=df.global.world.items.all
+	local last_min=-1
+	local ret={}
+	for i,v in ipairs(item_list) do
+		local item,found,vector_pos=utils.binsearch(vec,v,'id',nil,last_min,#vec)
+		if not found then
+			return ret
+		end
+		if not pos then
+			table.insert(ret,item)
+		else
+			if item.pos.x==pos.x and item.pos.y==pos.y and item.pos.z==pos.z then
+				table.insert(ret,item)
+			end
+		end
+		last_min=vector_pos
+	end
+	return ret
+end
+function list_items( pos )
+	local td,to=dfhack.maps.getTileFlags(pos)
+	if not to.item then
+		return {}
+	end
+	local block=dfhack.maps.getTileBlock(pos)
+	return find_all_items(block.items,pos)
+end
+function respond_json_look_items( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error":"invalid_login"}' end
+	local unit,err2=get_unit(user)
+	if not unit then return  '{"error":"invalid_unit"}' end
+
+	local dx,dy,dz
+	if cmd.dx and tonumber(cmd.dx) then dx=tonumber(cmd.dx) else dx=0 end
+	if cmd.dy and tonumber(cmd.dy) then dy=tonumber(cmd.dy) else dy=0 end
+	if cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) else dz=0 end
+
+	local tx=unit.pos.x+dx
+	local ty=unit.pos.y+dy
+	local tz=unit.pos.z+dz
+	
+	local items=list_items({x=tx,y=ty,z=tz})
+	local ret={}
+	for i,v in ipairs(items) do
+		table.insert(ret,{name=dfhack.items.getDescription(v,0),id=v.id})
+	end
+	return json_pack_arr(ret)
+end
+function respond_json_equip( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error":"invalid_login"}' end
+	local unit,err2=get_unit(user)
+	if not unit then return  '{"error":"invalid_unit"}' end
+
+	if not cmd.id or not tonumber(cmd.id) then return '{"error":"invalid_item_id"}' end
+	local item=df.item.find(tonumber(cmd.id))
+	if not item then return '{"error":"item_not_found"}' end
+	local ret=jobs.pickup_equipment(unit,item)
+	if not ret then return '{"error":"failed"}' end
+	return "{}"
+end
+function respond_json_haul( cmd,cookies )
+
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error":"invalid_login"}' end
+	local unit,err2=get_unit(user)
+	if not unit then return  '{"error":"invalid_unit"}' end
+
+	if not cmd.id or not tonumber(cmd.id) then return '{"error":"invalid_item_id"}' end
+	local item=df.item.find(tonumber(cmd.id))
+	if not item then return '{"error":"item_not_found"}' end
+	local dx=item.pos.x-unit.pos.x
+	local dy=item.pos.y-unit.pos.y
+	local dz=item.pos.z-unit.pos.z
+	if dx ~=0 or dy~=0 or dz~=0 then return '{"error":"item_too_far"}' end
+
+	local ret=dfhack.items.moveToInventory(item,unit,0,0)
+	if not ret then return '{"error":"failed"}' end
+	return "{}"
+end
+function respond_json_drop_haul( cmd,cookies )
+	local user,err=get_user(cmd,cookies)
+	if not user then return '{"error":"invalid_login"}' end
+	local unit,err2=get_unit(user)
+	if not unit then return  '{"error":"invalid_unit"}' end
+
+	local item
+	for i,v in ipairs(unit.inventory) do
+		if v.mode==0 then
+			item=v
+			break
+		end
+	end
+	if not item then return '{"error":"no_item_hauled"}' end
+
+	local ret=dfhack.items.moveToGround(item.item,copyall(unit.pos))
+	if not ret then  return '{"error":"failed_to_drop"}' end
+	return "{}"
 end
 function respond_json_items( cmd,cookies )
 	local ret="["
@@ -914,6 +1018,10 @@ function responses(request,cmd,cookies)
 	map_spectate=respond_json_map_spectate,
 	look_items=respond_json_look_items,
 	--actions
+	haul_item=respond_json_haul,
+	drop_hauled_item=respond_json_drop_haul,
+	equip_item=respond_json_equip,
+
 	move_unit=respond_json_move,
 	--economy
 	get_unit_list=respond_json_unit_list,
