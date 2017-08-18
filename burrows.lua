@@ -1,0 +1,1 @@
+df.global.ui.main.mode=51
