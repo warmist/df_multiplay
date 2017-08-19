@@ -84,6 +84,7 @@ function load_page_data()
 		['favicon.ico']='favicon.png',
 		['map.js']='map.js',
 		['chat.css']='chat.css',
+		['style.css']='style.css',
 	}
 	for k,v in pairs(assets) do
 		local f=io.open('hack/scripts/http/'..v,'rb')
@@ -270,19 +271,7 @@ function switch_burrow( user,burrow,value )
 		dfhack.burrows.setAssignedUnit(b,u,value==1)
 	end
 end
-function perform_commands(user, cmd )
-	if cmd=="new_unit" then
-		print("New unit for user:",user.name)
-		local unit=pick_target()
-		user={unit_id=unit.id}
-	elseif cmd=="help" then
-		return respond_help()
-	elseif starts_with(cmd,"labor=") then
-		switch_labor(user,cmd:match("labor=([^:]+):([01])"))
-	elseif starts_with(cmd,"burrow=") then
-		switch_burrow(user,cmd:match("burrow=([^:]+):([01])"))
-	end
-end
+
 function respond_login()
 	return page_data.intro..page_data.login..page_data.outro
 end

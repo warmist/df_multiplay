@@ -1,3 +1,11 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+
 <script>
 function getCookie(cname) {
     var name = cname + "=";
@@ -42,27 +50,31 @@ function get_highscore() {
     xhttp.send();
 }
 </script>
+
 <header>
-<h1>Dwarf fortress<h1>
+<h1>Dwarf fortress</h1>
 <p>The multiplayer experience: the gladiatoring</p>
 </header>
+<div id='motd'><b>MOTD: !!message_of_the_day!!</b></div>
 <div id='user_play'></div>
 <p>To play:<a href="login">Login</a>. If you don't have an account, it will be created when you try to login with that name.</p>
-<p>Or you can just <a href="spectate">Spectate</a>.
+<p>Or you can just <a href="spectate">Spectate</a>.</p>
 <p>More info in forums: <a href="http://www.bay12forums.com/smf/index.php?topic=165168.0"> DF forum thread</a> Source code:<a href="https://github.com/warmist/df_multiplay">Github repo</a></p>
-<script type="text/javascript">
-	var user=getCookie('username')
-	if(user!="")
-	{
-		document.getElementById("user_play").innerHTML = "<p> Welcome back "+user+". Would you like to <a href=play>Play</a>?</p>"
-	}
-</script>
 <div id='highscore'>
 Highscore:
     <ul id="hs_list">
-        
     </ul>
 </div>
 <script type="text/javascript">
     get_highscore()
+    //show play if you are logged in
+    var user=getCookie('username')
+    if(user!="")
+    {
+        document.getElementById("user_play").innerHTML = "<p> Welcome back "+user+". Would you like to <a href=play>Play</a>?</p>"
+    }
 </script>
+
+</header>
+</body>
+</html>
