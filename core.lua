@@ -2,6 +2,7 @@
 	server core functionality
 	TODO:
 		no easy way to pass plugin settings to functions
+		use json lib for serialization deserialization
 ]]
 local _ENV=mkmodule('hack.scripts.http.core')
 
@@ -198,6 +199,30 @@ function server:login( cmd,cookies )
 	end
 	return user
 end
+function server:save_users(path)
+	local user_save={}
+	for k,v in pairs(self.users) do
+		local tbl={name=v.name,password=v.password,money=v.money or 0}
+		if v.unit_id then
+			tbl.unit_id=v.unit_id
+		end
+		table.insert(user_save,tbl)
+	end
+	local f=io.open(path or "user_db.dat",'wb')
+	f:write(json_pack_arr(user_save))
+	f:close()
+end
+function server:load_users(path)
+	local f=require'json'.decode_file(path or "user_db.dat")
+	for i,v in ipairs(f) do
+		self.users[v.name]={name=v.name,password=v.password,money=v.money}
+		if v.unit_id then
+			self.users[v.name].unit_id=v.unit_id
+			self.unit_used=self.unit_used or {}
+			self.unit_used[v.unit_id]=self.users[v.name]
+		end
+	end
+end
 function server:stop()
 	if self.port_inst then
 		self.port_inst:close()
@@ -212,6 +237,7 @@ function server:stop()
 		dfhack.timeout_active(self.timeout_looper,nil)
 		self.timeout_looper=nil
 	end
+	self:save_users()
 end
 function server:shutdown()
 	self:stop()

@@ -6,6 +6,7 @@ local FPS_LIMIT=50
 --[[
 	TODO:
 		* change game mode should stop the server
+		* saving/loading users
 ]]
 local is_restart=false
 if args[1]=="-r" and server then
@@ -21,15 +22,10 @@ elseif args[1]=='-k' and server then
 	return
 end
 
-local users={} --TODO save/load users
-if server then
-	users=server.users
-end
-
 if not server then
-	server=core:server{users=users}
+	server=core:server{}
 end
-
+server:load_users()
 function inst_plug( name, do_reload,args)
 	local plug=require('hack.scripts.http.'.. name)
 	if do_reload then
