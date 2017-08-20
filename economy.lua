@@ -7,7 +7,8 @@ local printd=core.printd
 	Economy plugin into server
 		Gives access to buying units, items, gaining money through kills
 ]]
-local USE_MONEY=true --TODO move into plugin
+local USE_MONEY=true
+local KILL_MONEY=5
 local unit_data={}
 function find_caste( race_raw,caste_name )
 	for i,v in ipairs(race_raw.caste) do
@@ -388,8 +389,8 @@ function respond_play( server,cmd,cookies,user )
 
 	return core.fill_page_data(play_page,valid_variables)
 end
---[[
-function unit_death_callback( u_id )
+
+function unit_death_callback(server, u_id )
 	--print("Unit death:",u_id)
 	local u=df.unit.find(u_id)
 	if not u then print("WARN: unit not found!"); return end
@@ -398,8 +399,8 @@ function unit_death_callback( u_id )
 	if inc_id==-1 then print("WARN: not dead unit called callback!") return end
 	local killer=df.incident.find(inc_id).killer
 
-	if unit_used[killer] then
-		local user=unit_used[killer]
+	if server.unit_used[killer] then
+		local user=server.unit_used[killer]
 		if type(user)=='table' then --TODO: remove this @CLEANUP
 			local money=user.money
 			if money then
@@ -414,8 +415,6 @@ function unit_death_callback( u_id )
 		--print("Killer is not used:",killer)
 	end
 end
-eventful.onUnitDeath.multiplay=unit_death_callback
-eventful.enableEvent(eventful.eventType.UNIT_DEATH,100)]]
 
 serv_economy=defclass(serv_economy,core.serv_plugin)
 serv_economy.ATTRS={
@@ -432,9 +431,15 @@ serv_economy.ATTRS={
 		submit_new_unit={data=respond_actual_new_unit,needs_user=true},
 	},
 	name="economy",
+	server=DEFAULT_NIL,
 }
-function serv_economy.init(args)
+function serv_economy:init(args)
+	assert(self.server~=nil,"Server var needs to be set")
+	self.server.unit_used=self.server.unit_used or {}
 	load_buyables()
+	local eventful=require 'plugins.eventful'
+	eventful.onUnitDeath.multiplay=function(u_id) unit_death_callback(self.server,u_id) end
+	eventful.enableEvent(eventful.eventType.UNIT_DEATH,100)
 end
 plug=serv_economy
 

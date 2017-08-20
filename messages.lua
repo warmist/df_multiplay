@@ -1,5 +1,5 @@
 local _ENV=mkmodule('hack.scripts.http.messages')
-
+--TODO: add general server messages for player only. E.g. you gained X money for a kill
 local core=require 'hack.scripts.http.core'
 
 function respond_json_message(server, cmd, cookies, user)

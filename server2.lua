@@ -45,7 +45,7 @@ end
 server.page_vars.message_of_the_day="Experimenting with new server..."
 
 if df.global.gametype==df.game_type.DWARF_ARENA or df.global.gametype==df.game_type.ADVENTURE_ARENA then
-	inst_plug('economy',is_restart)
+	inst_plug('economy',is_restart,{server=server})
 else
 	error("This mode is not supported")
 end
