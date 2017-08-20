@@ -13,6 +13,11 @@ if args[1]=="-r" and server then
 elseif args[1]=='-s' and server then
 	server:stop()
 	return
+elseif args[1]=='-k' and server then
+	print("Deleting server data")
+	server:stop()
+	server=nil
+	return
 end
 
 local users={} --TODO save/load users
@@ -21,7 +26,7 @@ if server then
 end
 
 if not server then
-	server=core:server{users=users}
+	server=core:server{users=users,port=6666}
 end
 
 local map=require'hack.scripts.http.map'

@@ -56,7 +56,7 @@ end
 
 server=defclass(server)
 server.ATTRS{
-	port=6667,
+	port=6666,
 	host="http://dwarffort.duckdns.org/", --not sure if needed
 	port_inst=DEFAULT_NIL,
 	clients={},
@@ -121,6 +121,7 @@ function server:install_plugin(plug)
 	for k,v in pairs(plug.expose_pages) do
 		self.pages[k]=v
 	end
+	self.plugins[plug.name]=plug
 end
 function server:init( args )
 	self:load_default_pages()

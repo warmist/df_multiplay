@@ -233,7 +233,7 @@ users=users or {Test={name="Test",password="test"}}
 unit_used=unit_used or {}
 message_log=message_log or {}
 
-port=port or sock.tcp:bind(HOST,6666)
+port=port or sock.tcp:bind(HOST,6667)
 port:setNonblocking()
 
 local clients={}
