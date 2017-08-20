@@ -1,5 +1,7 @@
 --[[
 	server core functionality
+	TODO:
+		no easy way to pass plugin settings to functions
 ]]
 local _ENV=mkmodule('hack.scripts.http.core')
 
@@ -9,10 +11,48 @@ local sock=require 'plugins.luasocket'
 serv_plugin=defclass(serv_plugin)
 
 serv_plugin.ATTRS{
-	expose_pages={}, -- a list of functions or path strings (without .html) which get sent to client when they enter the "key" value
-	expose_json={}, --a list of functions that send json response
+	expose_pages={}, -- added to server pages list
+	expose_json={}, --added to server json pages list
+	expose_assets={}, -- same with assets
 	loop_tick=DEFAULT_NIL, -- callback with (server,plugin) that gets called each tick
+	name=DEFAULT_NIL,
 }
+
+function json_str( v )
+	if type(v)=="string" then
+		return '"'..v..'"'
+	elseif type(v)=="number" then
+		return v
+	elseif type(v)=="boolean" then
+		return v
+	elseif type(v)=="table" and v._is_array==nil then
+		return json_pack_obj(v)
+	elseif type(v)=="table" and v._is_array then
+		return json_pack_arr(v,v._is_array)
+	end
+end
+function json_pack_arr( t,start )
+	local ret=""
+	local comma=""
+	start=start or 1
+	for i=start,#t-(1-start) do
+		ret=ret..string.format('%s%s\n',comma,json_str(t[i]))
+		comma=','
+	end
+	return string.format("[%s]",ret)
+end
+function json_pack_obj( t)
+	local ret=""
+	local comma=""
+	for k,v in pairs(t) do
+		ret=ret..string.format('%s"%s":%s\n',comma,k,json_str(v))
+		comma=','
+	end
+	return string.format("{%s}",ret)
+end
+
+
+
 
 server=defclass(server)
 server.ATTRS{
@@ -29,8 +69,8 @@ server.ATTRS{
 	}, --global page variables
 
 	users={},
+	pause_countdown=0,
 }
-local printd
 if DEBUG then
 	printd=function ( ... )
 		print(...)
@@ -42,8 +82,12 @@ end
 function make_redirect(loc)
 	return "HTTP/1.1 302 Found\nLocation: "..loc.."\n\n"
 end
-function make_content(r)
-	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
+function make_content(r,alt)
+	if r then --FIXME: quick hack for alternative returns. Refactor responses
+		return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
+	else
+		return alt
+	end
 end
 function make_page_not_found( r )
 	return string.format("HTTP/1.0 404 Site Not Found\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
@@ -55,7 +99,7 @@ function make_json_content( r )
 	return make_mime_content(r,"application/json")
 end
 function make_json_error(err)
-	return make_json_content(string.format('{"error"="%s"}',err))
+	return make_json_content(string.format('{"error":"%s"}',err))
 end
 
 function fill_page_data( page_text,variables )
@@ -65,9 +109,22 @@ function fill_page_data( page_text,variables )
 	end
 	return page_text:gsub("(!![^!]+!!)",replace_vars)
 end
-
+function server:install_plugin(plug)
+	assert(plug.name~=nil)
+	print("Installing plugin:",plug.name)
+	for k,v in pairs(plug.expose_assets) do
+		self.assets[k]=v
+	end
+	for k,v in pairs(plug.expose_json) do
+		self.pages_json[k]=v
+	end
+	for k,v in pairs(plug.expose_pages) do
+		self.pages[k]=v
+	end
+end
 function server:init( args )
 	self:load_default_pages()
+	self.plugins={}
 end
 function load_page( name )
 	local f=io.open('hack/scripts/http/'..name..'.html','rb')
@@ -120,7 +177,7 @@ function server:load_default_pages()
 	end}
 end
 function server:make_error( err )
-	return fill_page_data(self.pages.error.text,{error=err})
+	return make_content(fill_page_data(self.pages.error.text,{error=err}))
 end
 function server:login( cmd,cookies )
 	if cmd.username==nil or cmd.username=="" then
@@ -129,7 +186,6 @@ function server:login( cmd,cookies )
 
 	local users=self.users
 	local user=users[cmd.username]
-	print("Login:",cmd.username,cmd.password,user)
 	if user==nil then --create new user, if one does not exist
 		users[cmd.username]={password=cmd.password,name=cmd.username}
 		print("New user:"..cmd.username)
@@ -179,6 +235,51 @@ function server:accept_connections()
 		c:setNonblocking()
 	end
 end
+function server:unpause()--TODO: move to a plugin
+	self.pause_countdown=10 --TODO: config this
+end
+function get_valid_unit_pos( burrow )
+	local x,y,z
+	if burrow then
+		for i=1,100 do
+
+			local blocks=dfhack.burrows.listBlocks(burrow)
+			local m_block=blocks[math.random(0,#blocks-1)]
+
+			local lx=math.random(0,15)
+			local ly=math.random(0,15)
+			if dfhack.burrows.isAssignedBlockTile(burrow,m_block,lx,ly) then
+				x=lx+m_block.map_pos.x
+				y=ly+m_block.map_pos.y
+				z=m_block.map_pos.z
+				if dfhack.maps.isValidTilePos(x,y,z) then
+					local attrs = df.tiletype.attrs
+					local tt=dfhack.maps.getTileType(x,y,z)
+					local td,to=dfhack.maps.getTileFlags(x,y,z)
+					if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+						return x,y,z
+					end
+				end
+			end
+		end
+	else
+		local mx,my,mz=dfhack.maps.getTileSize()
+		for i=1,1000 do
+			x=math.random(0,mx-1)
+			y=math.random(0,my-1)
+			z=math.random(0,mz-1)
+			if dfhack.maps.isValidTilePos(x,y,z) then
+				local attrs = df.tiletype.attrs
+				local tt=dfhack.maps.getTileType(x,y,z)
+				local td,to=dfhack.maps.getTileFlags(x,y,z)
+				if tt and not td.hidden and td.flow_size==0 and attrs[tt].shape==df.tiletype_shape.FLOOR then
+					return x,y,z
+				end
+			end
+		end
+	end
+end
+
 function parse_cookies( text )
 	local ret={}
 	for entry in text:gmatch("([^;]*);? ?") do
@@ -274,11 +375,11 @@ function server:get_user(cookies)
 end
 function server:get_unit( user )
 	if user.unit_id==nil then
-		return
+		return false,"No unit id"
 	end
 	local t=df.unit.find(user.unit_id)
 	if t ==nil then
-		return false,"Sorry, your unit was lost somewhere... :("
+		return false,"Unit id invalid"
 	end
 	return t,user.unit_id
 end
@@ -298,21 +399,21 @@ function server:respond( request,commands,cookies)
 
 	local json_req=self.pages_json[request]
 	if json_req then
-		if json_req.needs_auth then
+		if json_req.needs_user or json_req.needs_unit then
 			local err
 			user,err=self:get_user(cookies)
-			if user==nil then
+			if not user then
 				return make_json_error(err)
 			end
 		end
 		if json_req.needs_unit then
 			local err
 			unit,err=self:get_unit(user)
-			if unit==nil then
+			if not unit then
 				return make_json_error(err)
 			end
 		end
-		local content,err=json_req(self,commands,cookies,user,unit)
+		local content,err=json_req.data(self,commands,cookies,user,unit)
 		if not content then
 			return make_json_error(err)
 		else
@@ -322,26 +423,28 @@ function server:respond( request,commands,cookies)
 	--page responses
 	local page_req=self.pages[request]
 	if page_req and page_req.data then
-		if page_req.needs_auth then
+		if page_req.needs_user or page_req.needs_unit then
 			local err
 			user,err=self:get_user(cookies)
-			if user==nil then
+			if not user then
 				return self:make_error(err)
 			end
 		end
 		if page_req.needs_unit then
 			local err
 			unit,err=self:get_unit(user)
-			if unit==nil then
+			if not unit then
 				return self:make_error(err)
 			end
 		end
 		if type(page_req.data)=='function' then
-			local content,err=page_req.data(self,commands,cookies,user,unit)
-			if not content then
+			local content,err,content_alt=page_req.data(self,commands,cookies,user,unit) --FIXME: again very nasty hack...
+			if not content and not content_alt then
 				return self:make_error(err)
-			else
+			elseif content then
 				return make_content(content)
+			else
+				return content_alt
 			end
 		else
 			return make_content(fill_page_data(page_req.data,self.page_vars))
@@ -383,7 +486,45 @@ end
 function server:event_loop()
 	self:accept_connections()
 	self:serve_clients()
+	--TODO: move to a plugin
+	if self.pause_countdown>0 then
+		df.global.pause_state=false
+		self.pause_countdown=self.pause_countdown-1
+	else
+		df.global.pause_state=true
+	end
+
 	self.timeout_looper=dfhack.timeout(10,'frames',self:callback('event_loop'))
+end
+
+function sanitize(txt)
+    local replacements = {
+        ['&' ] = '&amp;',
+        ['<' ] = '&lt;',
+        ['>' ] = '&gt;',
+        ['\n'] = '<br/>'
+    }
+    return txt
+        :gsub('[&<>\n]', replacements)
+        :gsub(' +', function(s) return ' '..('&nbsp;'):rep(#s-1) end)
+end
+
+function encodeURI(str)
+	if (str) then
+		str = string.gsub (str, "\n", "\r\n")
+		str = string.gsub (str, "([^%w ])",
+			function (c) return string.format ("%%%02X", string.byte(c)) end)
+		str = string.gsub (str, " ", "+")
+   end
+   return str
+end
+
+function decodeURI(s)
+	if(s) then
+		s = string.gsub(s, '%%(%x%x)', 
+			function (hex) return string.char(tonumber(hex,16)) end )
+	end
+	return s
 end
 
 return _ENV

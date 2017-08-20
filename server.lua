@@ -65,8 +65,6 @@ local page_data={}
 local assets_data={}
 function load_page_data()
 	local files={
-		'intro',
-		'outro',
 		'welcome',
 		'login',
 		'cookie',
@@ -251,7 +249,7 @@ function make_json_content( r )
 	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: application/json\r\nContent-Length: %d\r\n\r\n%s",#r,r)
 end
 function respond_err() --TODO: actual error page?
-	return page_data.intro..fill_page_data(page_data.welcome,{hostname=HOST})..page_data.outro
+	return fill_page_data(page_data.welcome,{hostname=HOST})
 end
 
 function switch_labor(user,labor,value )
@@ -273,11 +271,11 @@ function switch_burrow( user,burrow,value )
 end
 
 function respond_login()
-	return page_data.intro..page_data.login..page_data.outro
+	return page_data.login
 end
 function respond_cookie(cmd)
 	if cmd.username==nil or cmd.username=="" then
-		return page_data.intro.."Invalid user"..page_data.outro
+		return "Invalid user"
 	end
 	local user=users[cmd.username]
 	if user==nil then --create new user, if one does not exist
@@ -285,14 +283,14 @@ function respond_cookie(cmd)
 		print("New user:"..cmd.username)
 		user=users[cmd.username]
 	elseif user.password~=cmd.password then --check password
-		return page_data.intro.."Invalid password"..page_data.outro
+		return "Invalid password"
 	end
 	user.name=cmd.username
 	return fill_page_data(page_data.cookie,{username=cmd.username,password=cmd.password}) --set cookies
 end
 function get_user(cmd, cookies)
 	if cookies.username==nil or cookies.username=="" or users[cookies.username]==nil or cookies.password~=users[cookies.username].password then
-		return false,page_data.intro.."Invalid login"..page_data.outro
+		return false,"Invalid login"
 	end
 	local user=users[cookies.username]
 	return user
@@ -304,7 +302,7 @@ function get_unit( user )
 
 	local t=df.unit.find(user.unit_id)
 	if t ==nil then
-		return false,page_data.intro.."Sorry, your unit was lost somewhere... :("..page_data.outro
+		return false,"Sorry, your unit was lost somewhere... :("
 	end
 	return t,user.unit_id
 end
@@ -324,7 +322,7 @@ function respond_play( cmd,cookies )
 		canvas_h=w*16,
 	}
 
-	return page_data.intro..fill_page_data(page_data.play,valid_variables)..page_data.outro
+	return fill_page_data(page_data.play,valid_variables)
 end
 function respond_spectate(cmd,cookies)
 	local m=df.global.world.map
@@ -338,7 +336,7 @@ function respond_spectate(cmd,cookies)
 		start_z=m.z_count//2,
 	}
 
-	return page_data.intro..fill_page_data(page_data.spectate,valid_variables)..page_data.outro
+	return fill_page_data(page_data.spectate,valid_variables)
 end
 function server_unpause()
 	pause_countdown=10
@@ -464,10 +462,10 @@ function respond_json_unit_info(cmd,cookies)
 end
 function respond_delete( cmd, cookies )
 	local user,err=get_user(cmd,cookies)
-	if not user then return page_data.intro.."Invalid user and/or login"..page_data.outro end
+	if not user then return "Invalid user and/or login" end
 
 	if not cmd.do_delete then
-		return page_data.intro.."Are you sure you want to <a href='delete?do_delete'> DELETE</a> your account?"..page_data.outro
+		return "Are you sure you want to <a href='delete?do_delete'> DELETE</a> your account?"
 	else
 		if user.unit_id then
 			unit_used[user.unit_id]=nil
@@ -477,7 +475,7 @@ function respond_delete( cmd, cookies )
 	end
 end
 function respond_new_unit(cmd,cookies)
-	return page_data.intro..fill_page_data(page_data.unit_select,{use_money=USE_MONEY})..page_data.outro
+	return fill_page_data(page_data.unit_select,{use_money=USE_MONEY})
 end
 function get_valid_unit_pos( burrow )
 	local x,y,z
@@ -551,7 +549,7 @@ function respond_actual_new_unit(cmd,cookies)
 		race=cmd.race_:match("([^%%]+)") --remove "%C<STH>"
 	end
 	if race==nil or tonumber(race)==nil or unit_data[tonumber(race)]==nil then
-		return page_data.intro.."Error: invalid race selected"..page_data.outro
+		return "Error: invalid race selected"
 	end
 	local sum_cost=0
 	local actual_race=unit_data[tonumber(race)]
@@ -565,7 +563,7 @@ function respond_actual_new_unit(cmd,cookies)
 	end
 
 	if not x then
-		return page_data.intro.."Error: could not find where to place unit"..page_data.outro
+		return "Error: could not find where to place unit"
 	end
 
 
@@ -600,7 +598,7 @@ function respond_actual_new_unit(cmd,cookies)
 	if USE_MONEY then
 		user.money=user.money or 0
 		if sum_cost>user.money then
-			return page_data.intro.."Error: not enough money"..page_data.outro
+			return "Error: not enough money"
 		else
 			user.money=user.money-sum_cost
 		end
@@ -616,7 +614,7 @@ function respond_actual_new_unit(cmd,cookies)
 		u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
 	end
 	if not u_id then
-		return page_data.intro.."Error: failed to create unit"..page_data.outro
+		return "Error: failed to create unit"
 	end
 
 	if cmd.unit_name~=nil and cmd.unit_name~="" then
@@ -688,27 +686,6 @@ function respond_json_move( cmd,cookies )
 	unit.path.path.x:resize(0)
 	unit.path.path.y:resize(0)
 	unit.path.path.z:resize(0)
-	return "{}"
-end
-function respon_json_items( cmd,cookies )
-	local user,err=get_user(cmd,cookies)
-	if not user then return '{"error":"invalid_login"}' end
-	local unit,err2=get_unit(user)
-	if not unit then return  '{"error":"invalid_unit"}' end
-
-	if unit.flags1.dead then return '{"error":"dead"}' end
-
-	if not cmd.dx or not tonumber(cmd.dx) then return "{error='invalid_dx'}" end
-	if not cmd.dy or not tonumber(cmd.dy) then return "{error='invalid_dy'}" end
-	local dz=0
-	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
-
-	local dx=tonumber(cmd.dx)
-	local dy=tonumber(cmd.dy)
-	local tx=unit.pos.x+dx
-	local ty=unit.pos.y+dy
-	local ty=unit.pos.z+dz
-
 	return "{}"
 end
 function respond_json_unit_list(cmd, cookies)
