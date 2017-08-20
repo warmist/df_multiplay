@@ -37,18 +37,22 @@ local general_plugs={
 	'map',
 	'messages',
 	'commands',
+	'spectate',
 }
 for i,v in ipairs(general_plugs) do
 	inst_plug(v,is_restart)
 end
 
-server.page_vars.message_of_the_day="Experimenting with new server..."
+server.page_vars.message_of_the_day="Experimenting with fort mode!"
 
 if df.global.gametype==df.game_type.DWARF_ARENA or df.global.gametype==df.game_type.ADVENTURE_ARENA then
 	inst_plug('economy',is_restart,{server=server})
+elseif df.global.gametype==df.game_type.DWARF_MAIN or df.global.gametype==DWARF_RECLAIM or df.global.gametype==DWARF_UNRETIRE then
+	inst_plug('possession',is_restart,{server=server})
 else
 	error("This mode is not supported")
 end
+
 
 if FPS_LIMIT then
 	df.global.enabler.fps=FPS_LIMIT

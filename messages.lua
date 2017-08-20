@@ -6,7 +6,7 @@ function respond_json_message(server, cmd, cookies, user)
 	server.message_log=server.message_log or {}
 	--TODO: limit size of message_log
 	local msg=core.decodeURI(cmd.msg)
-	msg=msg:sub(1,63)
+	--msg=msg:sub(1,63) --TODO: fix it in play.html and set normal size
 	msg=user.name..":"..core.sanitize(msg)
 	table.insert(server.message_log,msg)
 	print("CHAT>"..msg)
@@ -70,12 +70,14 @@ function respond_json_combat_log(server, cmd ,cookies, user, unit)
 	local comma=''
 	if #log>0 then
 		for i=last_seen,#log-1 do
-			local report=df.report.find(log[i])
-			if report then
-			local text=report.text
-				text=text:gsub('"','')
-				ret=ret..string.format('%s"%s"\n',comma,text)
-				comma=','
+			if log[i]>=0 then
+				local report=df.report.find(log[i])
+				if report then
+				local text=report.text
+					text=text:gsub('"','')
+					ret=ret..string.format('%s"%s"\n',comma,text)
+					comma=','
+				end
 			end
 		end
 	end

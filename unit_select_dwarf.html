@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8"/>
+	<link rel="stylesheet" type="text/css" href="style.css">
+	<link rel="stylesheet" type="text/css" href="chat.css">
+</head>
+<body>
+<script>
+var unit_list=[]
+function get_units()
+{
+	var usel=document.getElementById("unit_select")
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4 && this.status == 200) {
+		var u_list= JSON.parse(this.responseText);
+		u_list.forEach(function (e,i) {
+			usel.options.add( new Option(e.name+" "+e.prof,[e.id,i], false) );
+		})
+	}
+	};
+	xhttp.open("GET", "get_unit_list", true);
+	xhttp.send();
+}
+</script>
+<form action="/submit_new_unit" method="POST" id="form1" name="unit_form">
+Unit:<br>
+<select id="unit_select" name="unit" form="form1"></select><br>
+<button type='submit' form='form1' value='submit' name='button1'>Ask for this unit</button>
+</form>
+<script type="text/javascript">
+	get_units()
+</script>
+</body>
+</html>

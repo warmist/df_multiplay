@@ -38,10 +38,10 @@ function respond_json_drop_haul(server,cmd,cookies,user,unit)
 			break
 		end
 	end
-	if not item then return "no_item_hauled" end
+	if not item then return nil,"no_item_hauled" end
 
 	local ret=dfhack.items.moveToGround(item.item,copyall(unit.pos))
-	if not ret then  return "failed_to_drop" end
+	if not ret then  return nil,"failed_to_drop" end
 	return "{}"
 end
 function dir_signs( dx,dy )

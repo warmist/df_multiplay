@@ -35,6 +35,8 @@
   <button type="button" onclick="haul_item()">Haul Item</button>
   <button type="button" onclick="drop_hauled_item()">Drop Haul</button>
   <button type="button" onclick="equip_item()">Equip item</button>
+  <br>
+  <button type="button" onclick="location.href = 'new_job';">Issue a job</button>
 </div>
 <br>
 
@@ -283,6 +285,26 @@ function get_message_log(){
 }
 get_message_log()
 /*
+	general game status
+*/
+function get_status(){
+	var xhttp = new XMLHttpRequest();
+	xhttp.onreadystatechange = function() {
+	if (this.readyState == 4) {
+		if(this.status == 200)
+		{
+			var json_response= JSON.parse(this.responseText);
+			element=document.getElementById("status")
+			element.innerHTML="Paused:"+json_response.paused+" Activity:"+json_response.activity+" Job:"+json_response.job
+		}
+		setTimeout(get_status, 200);
+	}
+	};
+	xhttp.open("GET", "get_status", true);
+	xhttp.send();
+}
+get_status()
+/*
 	combat report stuff
 */
 var combat_log={last_seen:0,text:[]}
@@ -319,6 +341,7 @@ function get_combat_log(){
 get_combat_log()
 </script>
 <button onclick="location.href = 'new_unit';">Ask for new unit</button>
+<div id="status"></div>
 <div id="combat_log_div">
 
 </div>

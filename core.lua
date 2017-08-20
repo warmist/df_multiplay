@@ -514,13 +514,14 @@ function server:event_loop()
 	self:accept_connections()
 	self:serve_clients()
 	--TODO: move to a plugin
+	--[[
 	if self.pause_countdown>0 then
 		df.global.pause_state=false
 		self.pause_countdown=self.pause_countdown-1
 	else
 		df.global.pause_state=true
 	end
-
+	]]
 	self.timeout_looper=dfhack.timeout(10,'frames',self:callback('event_loop'))
 end
 
