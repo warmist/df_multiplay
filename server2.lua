@@ -43,7 +43,7 @@ for i,v in ipairs(general_plugs) do
 	inst_plug(v,is_restart)
 end
 
-server.page_vars.message_of_the_day="Experimenting with fort mode!"
+server.page_vars.message_of_the_day="Arena mode running"
 
 if df.global.gametype==df.game_type.DWARF_ARENA or df.global.gametype==df.game_type.ADVENTURE_ARENA then
 	inst_plug('economy',is_restart,{server=server})

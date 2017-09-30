@@ -79,34 +79,19 @@ function key_movement(){
 	}
 }
 key_movement()
-function update_map() {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4) {
-		if(this.status==200)
-		{
-			var json_map= JSON.parse(this.responseText);
-			draw_map(json_map)
-		}
-		setTimeout(update_map, 100);
-	}
-	};
-	xhttp.open("GET", "map?dz="+view_dz, true);
-	xhttp.send();
+var move_state={}
+var combat_log={last_seen:0,text:[]}
+var message_log={last_seen:0,text:[]}
+var mouseIsDown = false;
+function do_map(state) {
+	draw_map(state.map)
 }
+
 var mouse_pos={x:0,y:0}
 function move_unit(dx,dy,dz,on_done) {
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4 ) {
-		if(!isNil(on_done))
-			on_done(this.status == 200);
-	}
-	};
-	xhttp.open("GET", "move_unit?dx="+dx+"&dy="+dy+"&dz="+dz, true);
-	xhttp.send();
+	move_state={dx:dx,dy:dy,dz:dz}
 }
-var mouseIsDown = false;
+
 function update_mouse(e) {
 	var cx=Math.floor(e.x/tile_x)-(canvas_tile_count-1)/2;
 	var cy=Math.floor(e.y/tile_y)-(canvas_tile_count-1)/2;
@@ -119,9 +104,7 @@ c.onmousedown = function(e){
     move_unit(mouse_pos.x,mouse_pos.y,view_dz)
     mouseIsDown = true;
 }
-
 c.onmouseup = function(e){
-
     mouseIsDown = false;
 }
 /* //TODO issue commands each X time
@@ -131,7 +114,7 @@ c.onmousemove = function(e){
     return false;
 }
 */
-update_map();
+//update_map();
 
 
 function add_max(a,e,m)
@@ -235,7 +218,7 @@ function equip_item()
 /*
 	chat stuff
 */
-var message_log={last_seen:0,text:[]}
+
 function input_box(e)
 {
 	if(e.keyCode==13)
@@ -246,7 +229,6 @@ function input_box(e)
 }
 function send_message(){
 	var el=document.getElementById('usermsg')
-
 	var xhttp = new XMLHttpRequest();
 	var msg=encodeURI(el.value)
 	xhttp.open("GET", "send_message?msg="+msg, true);
@@ -260,33 +242,19 @@ function update_message_log(){
 		element.innerHTML+=el+"<br>"
 	})
 }
-function get_message_log(){
-	var xhttp = new XMLHttpRequest();
-	xhttp.onreadystatechange = function() {
-	if (this.readyState == 4) {
-		if(this.status == 200)
-		{
-			var json_report= JSON.parse(this.responseText);
-			message_log.last_seen=json_report.current_count
-			var print_lines=10
-			if(json_report.log.length>0)
-			{
-				message_log.text=add_max(message_log.text,json_report.log,print_lines)
-				update_message_log()
-			}
-		}
-		setTimeout(get_message_log, 200);
+function do_messages(state) {
+	var mlog=state.message_log
+	message_log.last_seen=mlog.current_count
+	var print_lines=10
+	if(mlog.log.length>0)
+	{
+		message_log.text=add_max(message_log.text,mlog.log,print_lines)
+		update_message_log()
 	}
-	};
-	xhttp.open("GET", "get_message_log?last_seen="+message_log.last_seen, true);
-	xhttp.send();
 }
-get_message_log()
 /*
 	combat report stuff
 */
-var combat_log={last_seen:0,text:[]}
-
 function update_log(){
 	element=document.getElementById("combat_log_div")
 	element.innerHTML=""
@@ -294,29 +262,45 @@ function update_log(){
 		element.innerHTML+=el+"<br>"
 	})
 }
-function get_combat_log(){
+function do_combat_log(state) {
+	var clog=state.combat_log
+	combat_log.last_seen=clog.current_count
+	var print_lines=10
+	if(clog.log.length>0)
+	{
+		combat_log.text=add_max(combat_log.text,clog.log,print_lines)
+		update_log()
+	}
+}
+
+
+function game_tick() { //all game logic here
+	var state={dz:view_dz,
+		move:move_state,
+		message_last:message_log.last_seen,
+		combat_last:combat_log.last_seen
+	}
 
 	var xhttp = new XMLHttpRequest();
 	xhttp.onreadystatechange = function() {
 	if (this.readyState == 4) {
-		if(this.status == 200)
+		if(this.status==200)
 		{
-			var json_report= JSON.parse(this.responseText);
-			combat_log.last_seen=json_report.current_count
-			var print_lines=10
-			if(json_report.log.length>0)
-			{
-				combat_log.text=add_max(combat_log.text,json_report.log,print_lines)
-				update_log()
-			}
+			var json_state= JSON.parse(this.responseText);
+			do_map(json_state)
+			do_messages(json_state)
+			do_combat_log(json_state)
 		}
-		setTimeout(get_combat_log, 200);
+		setTimeout(game_tick, 100);
 	}
 	};
-	xhttp.open("GET", "get_report_log?last_seen="+combat_log.last_seen, true);
-	xhttp.send();
+	xhttp.open("POST", "gamestate", true);
+	xhttp.setRequestHeader("Content-Type", "application/json");
+	xhttp.send(JSON.stringify(state));
+	move_state={dx:0,dy:0,dz:0}
 }
-get_combat_log()
+game_tick();
+
 </script>
 <button onclick="location.href = 'new_unit';">Ask for new unit</button>
 <div id="combat_log_div">

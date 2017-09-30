@@ -23,6 +23,14 @@ function json_map(x,y,z,w,h)
 	end
 	return '['..map_string..']'
 end
+function table_map( x,y,z,w,h )
+	local m=map.render_map_rect(x,y,z,w,h)
+	local ret={_is_array=1}
+	for i=0,#m,4 do
+		table.insert(ret,{_is_array=1,m[i],m[i+1],m[i+2],m[i+3]})
+	end
+	return ret
+end
 local function respond_json_map(server,cmd,cookies,user,unit)
 	local delta_z=0
 	if cmd.dz and tonumber(cmd.dz) then
@@ -94,7 +102,24 @@ function respond_json_look_items( server,cmd,cookies,user,unit )
 	end
 	return core.json_pack_arr(ret)
 end
+function respond_gamestate(server, plug, req, state, hidden)
+	local unit=hidden.unit
+	if unit ==nil then
+		state.map=nil
+		return false
+	end
+	local delta_z=0
+	if req.dz and tonumber(req.dz) then
+		delta_z=tonumber(req.dz)
+	end
+	server:unpause()
 
+
+	local w=21
+	state.map=table_map(unit.pos.x-w//2-1,unit.pos.y-w//2-1,unit.pos.z+delta_z,w,w)
+
+	return true
+end
 serv_map=defclass(serv_map,core.serv_plugin)
 serv_map.ATTRS={
 	expose_json={
@@ -103,6 +128,7 @@ serv_map.ATTRS={
 		look_items={data=respond_json_look_items,needs_unit=true,needs_user=true},
 	},
 	spectate_unpauses=false,
+	gamestate_hook=respond_gamestate,
 	name="map",
 }
 plug=serv_map

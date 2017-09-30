@@ -54,17 +54,7 @@ function dir_signs( dx,dy )
 	if dy<0 then sy=-1 end
 	return sx,sy
 end
-function respond_json_move( server,cmd,cookies,user,unit )
-
-	if unit.flags1.dead then return nil,"dead" end
-
-	if not cmd.dx or not tonumber(cmd.dx) then return nil,'invalid_dx' end
-	if not cmd.dy or not tonumber(cmd.dy) then return nil,'invalid_dy' end
-	local dz=0
-	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
-
-	local dx=tonumber(cmd.dx)
-	local dy=tonumber(cmd.dy)
+function move_unit( unit,dx,dy,dz )
 	local tx=unit.pos.x+dx
 	local ty=unit.pos.y+dy
 	unit.idle_area.x=tx
@@ -97,9 +87,38 @@ function respond_json_move( server,cmd,cookies,user,unit )
 	unit.path.path.x:resize(0)
 	unit.path.path.y:resize(0)
 	unit.path.path.z:resize(0)
+	return true
+end
+function respond_json_move( server,cmd,cookies,user,unit )
+
+	if unit.flags1.dead then return nil,"dead" end
+
+	if not cmd.dx or not tonumber(cmd.dx) then return nil,'invalid_dx' end
+	if not cmd.dy or not tonumber(cmd.dy) then return nil,'invalid_dy' end
+	local dz=0
+	if  cmd.dz and tonumber(cmd.dz) then dz=tonumber(cmd.dz) end
+
+	local dx=tonumber(cmd.dx)
+	local dy=tonumber(cmd.dy)
+	move_unit(unit,dx,dy,dz)
+
 	return "{}"
 end
-
+function respond_gamestate(server, plug, req, state, hidden)
+	local unit=hidden.unit
+	if unit==nil then
+		return false
+	end
+	if req.move==nil then
+		return true
+	end
+	local m=req.move
+	if m.dx==0 and m.dy==0 and m.dz==0 then
+		return true
+	end
+	state.move=move_unit(unit,m.dx,m.dy,m.dz)
+	return true
+end
 serv_commands=defclass(serv_commands,core.serv_plugin)
 serv_commands.ATTRS={
 	expose_json={
@@ -110,7 +129,7 @@ serv_commands.ATTRS={
 		--movement
 		move_unit={data=respond_json_move,needs_user=true,needs_unit=true},
 	},
-
+	gamestate_hook=respond_gamestate,
 	name="commands",
 }
 plug=serv_commands

@@ -7,7 +7,23 @@
 local _ENV=mkmodule('hack.scripts.http.core')
 
 local sock=require 'plugins.luasocket'
+--TODO move to a plug
+function find_burrow(name)
+	local b=df.global.ui.burrows.list
+	for i,v in ipairs(b) do
+		if v.name==name then
+			return v
+		end
+	end
+	print("WARN:"..name.." burrow not found")
+end
 
+local SPAWN_MOBS=15
+local npc_spawn
+if SPAWN_MOBS then
+	npc_spawn=find_burrow("SPAWN_MOBS")
+	--print("npc_spawn:",npc_spawn)
+end
 
 serv_plugin=defclass(serv_plugin)
 
@@ -16,6 +32,7 @@ serv_plugin.ATTRS{
 	expose_json={}, --added to server json pages list
 	expose_assets={}, -- same with assets
 	loop_tick=DEFAULT_NIL, -- callback with (server,plugin) that gets called each tick
+	gamestate_hook=DEFAULT_NIL, --callback with (server,plugin,request_table,current_state,hidden_state). This is main client game loop function
 	name=DEFAULT_NIL,
 }
 
@@ -51,8 +68,9 @@ function json_pack_obj( t)
 	end
 	return string.format("{%s}",ret)
 end
-
-
+function json_unpack_obj( s )
+	return require('json').decode(s)
+end
 
 
 server=defclass(server)
@@ -317,7 +335,10 @@ function parse_cookies( text )
 	end
 	return ret
 end
-function parse_content( other )
+function parse_content( other,is_json)
+	if is_json then
+		return json_unpack_obj(other)
+	end
 	if other~=nil then
 		local command={}
 		other=other:gsub("%%20"," ")--drop '?' and fix spaces
@@ -347,7 +368,7 @@ function parse_request( client )
 	printd(s)
 
 	local is_post
-
+	local is_json
 	local path,other=s:match("GET /([^ ?]*)([^ ]*)")
 	if path==nil and other==nil then
 		path,other=s:match("POST /([^ ?]*)([^ ]*)")
@@ -361,6 +382,7 @@ function parse_request( client )
 	local post_length=0
 	while s do
 		s=client:receive()
+
 		if s then
 			if s==string.char(13) then
 				break
@@ -376,6 +398,9 @@ function parse_request( client )
 				if c and tonumber(c) then
 					post_length=tonumber(c)
 				end
+				if s:match("Content%-Type: application%/json") then
+					is_json=true
+				end
 			end
 		end
 	end
@@ -384,7 +409,7 @@ function parse_request( client )
 		if post_length~=0 then
 			s=client:receive(post_length)
 			if s then
-				other=parse_content(s)
+				other=parse_content(s,is_json)
 			end
 		end
 	elseif is_post and not post_length then
@@ -410,6 +435,21 @@ function server:get_unit( user )
 	end
 	return t,user.unit_id
 end
+function server:respond_gamestate(commands,cookies)
+	local user=self:get_user(cookies)
+	local unit
+	if user then
+		unit=self:get_unit(user)
+	end
+	local hidden={user=user,unit=unit}
+	local state={}
+	for name,plug in pairs(self.plugins) do
+		if plug.gamestate_hook then
+			plug.gamestate_hook(self,plug,commands,state,hidden)
+		end
+	end
+	return make_json_content(json_pack_obj(state))
+end
 function server:respond( request,commands,cookies)
 	request=request or "" --fix nil request
 	local user,unit
@@ -421,6 +461,10 @@ function server:respond( request,commands,cookies)
 		else
 			return make_content(assets_req.data)
 		end
+	end
+	--then special gamestate logic
+	if request=="gamestate" then
+		return self:respond_gamestate(commands,cookies)
 	end
 	--then json responses
 
@@ -510,18 +554,55 @@ function server:serve_clients()
 		self.clients[k]=nil
 	end
 end
+function clear_items()
+	local as=df.global.world.arena_spawn.equipment
+	as.item_types:resize(0)
+	as.item_subtypes:resize(0)
+	as.item_materials.mat_type:resize(0)
+	as.item_materials.mat_index:resize(0)
+	as.item_counts:resize(0)
+end
+function spawn_mob()
+	if npc_spawn then
+		local x,y,z=get_valid_unit_pos(npc_spawn)
+		if x then
+			df.global.world.arena_spawn.side=66
+			clear_items()
+			local create_unit=dfhack.script_environment('modtools/create-unit')
+			printd("Spawning mob:",x,y,z)
+			local u_id=create_unit.createUnit(576,math.random(0,1),{x,y,z}) --TODO more customization?
+			local u=df.unit.find(u_id)
+		end
+	end
+end
+function count_mobs()
+	local count=0
+	for i,v in ipairs(df.global.world.units.active) do
+		if not v.flags1.dead and v.enemy.enemy_status_slot==66 then
+			count=count+1
+		end
+	end
+	return count
+end
+
 function server:event_loop()
 	self:accept_connections()
 	self:serve_clients()
 	--TODO: move to a plugin
-	--[[
+	-- [[
 	if self.pause_countdown>0 then
 		df.global.pause_state=false
 		self.pause_countdown=self.pause_countdown-1
 	else
 		df.global.pause_state=true
 	end
-	]]
+	--]]
+	--TODO move to a plugin
+	local m_count=count_mobs()
+		--print("Count:",m_count,SPAWN_MOBS)
+	if m_count<SPAWN_MOBS then
+		spawn_mob()
+	end
 	self.timeout_looper=dfhack.timeout(10,'frames',self:callback('event_loop'))
 end
 
