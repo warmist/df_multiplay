@@ -124,6 +124,76 @@ function check_money(){
 	alert("Not enough money!")
 	return false;
 }
+function get_form_data()
+{
+	//only need name, race and item list
+	var f=document.getElementById("form1")
+	var data={}
+	data.name=f.unit_name.value
+
+	data.race=f.race_.value
+	data.items={}
+	for (var i = 0; i < f.items_done.length; i++) {
+		data.items[i]={value:f.items_done[i].value,name:f.items_done[i].text}
+	}
+	data.items.length=f.items_done.length
+	return data
+}
+function fill_form_data(data)
+{
+	var f=document.getElementById("form1")
+
+	f.unit_name.value=data.name
+	f.race_.value=data.race
+
+	for (var i = f.items_done.options.length - 1; i >= 0; i--) {
+		f.items_done.options.remove(i);
+	}
+	for (var i = 0; i < data.items.length; i++) {
+		f.items_done.options.add(new Option(data.items[i].name,data.items[i].value,false))
+	}
+	recalcCost()
+}
+function load_all_configs() {
+	var s=document.getElementById("form_datalist");
+	var old_data=JSON.parse(localStorage["saved_forms"] || "{}")
+	for(var k in old_data)
+	{
+		var option = document.createElement('option');
+	   	option.value = k;
+	   	s.appendChild(option);
+	}
+}
+function save_form() {
+	var s=document.getElementById("saved_form");
+	var name=s.value
+	if (name!="")
+	{
+		var old_data=JSON.parse(localStorage["saved_forms"] || "{}")
+
+		var form_data=get_form_data()
+		old_data[name]=form_data
+
+		localStorage.setItem("saved_forms",JSON.stringify(old_data));//TODO: better saving?
+	}
+	else
+	{
+		alert("Invalid name to save");
+	}
+}
+function load_form() {
+	var s=document.getElementById("saved_form");
+	var name=s.value
+	var old_data=JSON.parse(localStorage["saved_forms"] || null)
+	fill_form_data(old_data[name])
+}
+function display_saving() {
+	var d=document.getElementById("saving_div");
+	if (typeof(Storage) !== "undefined") {
+		d.style.display="block";
+	}
+}
+
 </script>
 <form action="/submit_new_unit" method="POST" id="form1" name="unit_form" oninput="recalcCost()" onsubmit="selectAll();">
 Unit name:(alpha numeric only please:)<br>
@@ -144,12 +214,20 @@ Cost:<div id="cost_calc">0</div><br>
 <button type='submit' form='form1' value='submit' name='button1' onclick="return check_money()">Ask for new unit</button>
 </form>
 
+<div id="saving_div" style="display:none">
+<input type="text" list="form_datalist" id="saved_form"></input><br>
+<datalist id="form_datalist"></datalist>
+<button onclick="save_form()" type="button">Save config</button><br>
+<button onclick="load_form()" type="button">Load config</button><br>
+</div>
 
 <script type="text/javascript">
 	get_races()
 	fill_materials()
 	fill_items()
 	get_money()
+	display_saving()
+	load_all_configs()
 </script>
 </body>
 </html>
