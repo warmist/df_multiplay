@@ -81,7 +81,7 @@ function job_fish( unit,cmd )
 	local trg,err=get_pos(cmd)
 	if not trg then return false,err end
 
-if not jb.fish(unit,trg) then
+	if not jb.fish(unit,trg) then
 		return false,"Failed to start fishing"
 	end
 	return true

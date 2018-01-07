@@ -231,6 +231,7 @@ function server:save_users(path)
 	f:close()
 end
 function server:load_users(path)
+	pcall(function()
 	local f=require'json'.decode_file(path or "user_db.dat")
 	for i,v in ipairs(f) do
 		self.users[v.name]={name=v.name,password=v.password,money=v.money}
@@ -240,6 +241,7 @@ function server:load_users(path)
 			self.unit_used[v.unit_id]=self.users[v.name]
 		end
 	end
+	end)
 end
 function server:stop()
 	if self.port_inst then

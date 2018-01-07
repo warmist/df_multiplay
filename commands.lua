@@ -109,10 +109,10 @@ function respond_gamestate(server, plug, req, state, hidden)
 	if unit==nil then
 		return false
 	end
-	if req.move==nil then
+	local m=req.move
+	if m==nil then
 		return true
 	end
-	local m=req.move
 	if m.dx==0 and m.dy==0 and m.dz==0 then
 		return true
 	end
