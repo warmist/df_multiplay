@@ -59,26 +59,13 @@ var movement={
 function isNil(value) {
   return value == undefined;
 }
-var cur_movement
+var key_movement
 document.onkeydown=function (key) {
-	cur_movement=movement[key.code]
+	key_movement=movement[key.code]
 }
 document.onkeyup=function (key) {
-	cur_movement=null
+	key_movement=null
 }
-function key_movement(){
-	if(!isNil(cur_movement))
-	{
-		move_unit(cur_movement[0],cur_movement[1],view_dz,function () {
-			setTimeout(key_movement, 100);
-		})
-	}
-	else
-	{
-		setTimeout(key_movement, 100);
-	}
-}
-key_movement()
 var move_state={dx:0,dy:0,dz:0}
 var combat_log={last_seen:0,text:[]}
 var message_log={last_seen:0,text:[]}
@@ -297,7 +284,10 @@ function game_tick() { //all game logic here
 	xhttp.open("POST", "gamestate", true);
 	xhttp.setRequestHeader("Content-Type", "application/json");
 	xhttp.send(JSON.stringify(state));
-	move_state={dx:0,dy:0,dz:0}
+	if(key_movement)
+		move_state={dx:key_movement[0],dy:key_movement[1],dz:0};
+	else
+		move_state={dx:0,dy:0,dz:0};
 }
 game_tick();
 
