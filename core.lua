@@ -75,7 +75,7 @@ end
 
 server=defclass(server)
 server.ATTRS{
-	port=6666,
+	port=80,
 	host="http://dwarffort.duckdns.org/", --not sure if needed
 	port_inst=DEFAULT_NIL,
 	clients={},
@@ -580,7 +580,7 @@ end
 function count_mobs()
 	local count=0
 	for i,v in ipairs(df.global.world.units.active) do
-		if not v.flags1.dead and v.enemy.enemy_status_slot==66 then
+		if not v.flags2.killed and v.enemy.enemy_status_slot==66 then
 			count=count+1
 		end
 	end
