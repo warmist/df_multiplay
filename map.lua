@@ -1,6 +1,6 @@
 local _ENV=mkmodule('hack.scripts.http.map')
 local core=require 'hack.scripts.http.core'
-local map=require 'plugins.twbt-utils'
+local map=require 'plugins.map-render'
 local utils=require 'utils'
 
 function json_map(x,y,z,w,h)
