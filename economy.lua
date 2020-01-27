@@ -209,13 +209,13 @@ function respond_actual_new_unit(cmd,cookies,user)
 	end
 	--str = str:gsub('%W','')
 	df.global.world.arena_spawn.side=0
-	local create_unit=dfhack.script_environment('modtools/create-unit')
+	
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
 	local u_id
 	if FORTMODE then
 		u_id=create_unit.createUnitInFortCivAndGroup(actual_race.race_id,actual_race.caste_id,{x,y,z})
 	else
-		u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
+		u_id=core.create_unit_simple(actual_race.race_id,actual_race.caste_id,{x=x,y=y,z=z})
 	end
 	if not u_id then
 		return "Error: failed to create unit"
@@ -350,9 +350,9 @@ function respond_actual_new_unit(server,cmd,cookies,user)
 	end
 
 	df.global.world.arena_spawn.side=0
-	local create_unit=dfhack.script_environment('modtools/create-unit')
+
 	print("New unit for user:",user.name, " unit race:",actual_race.race_raw.creature_id)
-	local u_id=create_unit.createUnit(actual_race.race_id,actual_race.caste_id,{x,y,z})
+	local u_id=core.create_unit_simple(actual_race.race_id,actual_race.caste_id,{x=x,y=y,z=z})
 
 	if not u_id then
 		return nil,"Failed to create unit"

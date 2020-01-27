@@ -24,7 +24,15 @@ if SPAWN_MOBS then
 	npc_spawn=find_burrow("SPAWN_MOBS")
 	--print("npc_spawn:",npc_spawn)
 end
+function create_unit_simple( race_id,caste_id,pos,count )
+	local create_unit=dfhack.script_environment('modtools/create-unit')
+	local u=create_unit.createUnitBase(race_id,caste_id,nil,pos,
+		nil,nil,nil,nil,nil,nil,nil,nil,
+		count or 1
+		)
 
+	return u[1].id
+end
 serv_plugin=defclass(serv_plugin)
 
 serv_plugin.ATTRS{
@@ -101,9 +109,9 @@ end
 function make_redirect(loc)
 	return "HTTP/1.1 302 Found\nLocation: "..loc.."\n\n"
 end
-function make_content(r,alt)
+function make_content(r,alt,ext_header)
 	if r then --FIXME: quick hack for alternative returns. Refactor responses
-		return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
+		return string.format("HTTP/2.0 200 OK\r\nConnection: Close\r\n%sContent-Length: %d\r\n\r\n%s",ext_header or "",#r,r)
 	else
 		return alt
 	end
@@ -111,8 +119,15 @@ end
 function make_page_not_found( r )
 	return string.format("HTTP/1.0 404 Site Not Found\r\nConnection: Close\r\nContent-Length: %d\r\n\r\n%s",#r,r)
 end
-function make_mime_content( r,mime )
-	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: %s\r\nContent-Length: %d\r\n\r\n%s",mime,#r,r)
+function make_mime_content( r,mime,ext_header )
+	return string.format("HTTP/1.0 200 OK\r\nConnection: Close\r\nContent-Type: %s\r\nContent-Length: %d\r\n%s\r\n%s",mime,#r,ext_header or "",r)
+end
+function make_cookie_header( cookies )
+	local ret=""
+	for k,v in pairs(cookies) do
+		ret=ret..string.format("Set-Cookie: %s=%s\r\n",k,v)
+	end
+	return ret
 end
 function make_json_content( r )
 	return make_mime_content(r,"application/json")
@@ -159,14 +174,14 @@ function load_page( name )
 end
 function server:load_default_pages()
 	local assets={
-		['favicon.ico']='favicon.png',
-		['map.js']='map.js',
-		['chat.css']='chat.css',
-		['style.css']='style.css',
+		['favicon.ico']={'favicon.png',"image/png"},
+		['map.js']={'map.js',"application/javascript"},
+		['chat.css']={'chat.css',"text/css"},
+		['style.css']={'style.css',"text/css"},
 	}
 	for k,v in pairs(assets) do
-		local f=io.open('hack/scripts/http/'..v,'rb')
-		self.assets[k]={data=f:read('all')}
+		local f=io.open('hack/scripts/http/'..v[1],'rb')
+		self.assets[k]={data=f:read('all'),mime=v[2]}
 		f:close()
 	end
 
@@ -190,7 +205,8 @@ function server:load_default_pages()
 	function (server,cmd,cookies)
 		local user,err=server:login(cmd,cookies)
 		if user then
-			return fill_page_data(server.pages.cookie.text,{username=user.name,password=user.password})
+			local ret=make_content(server.pages.cookie.text,nil,make_cookie_header{username=user.name,password=user.password})
+			return nil,nil, ret
 		else
 			return server:make_error(err)
 		end
@@ -570,10 +586,8 @@ function spawn_mob()
 		if x then
 			df.global.world.arena_spawn.side=66
 			clear_items()
-			local create_unit=dfhack.script_environment('modtools/create-unit')
-			printd("Spawning mob:",x,y,z)
-			local u_id=create_unit.createUnit(576,math.random(0,1),{x,y,z}) --TODO more customization?
-			local u=df.unit.find(u_id)
+			create_unit_simple(576,math.random(0,1),{x=x,y=y,z=z}) --TODO more customization? TODO: check if race exists
+			--local u=df.unit.find(u_id) --not used currently but we could do something with it?
 		end
 	end
 end
